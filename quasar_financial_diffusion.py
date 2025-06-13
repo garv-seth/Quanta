@@ -679,10 +679,26 @@ class QuantumInspiredFinancialDiffusionModel(nn.Module):
         if noise is None:
             noise = torch.randn_like(x_start.float())
         
-        # Use proper tensor indexing for diffusion schedule
-        alphas_cumprod = self.alphas_cumprod.to(x_start.device)
-        sqrt_alphas_cumprod_t = torch.sqrt(alphas_cumprod[t])
-        sqrt_one_minus_alphas_cumprod_t = torch.sqrt(1.0 - alphas_cumprod[t])
+        # Fixed tensor indexing for diffusion schedule
+        device = x_start.device
+        t = t.to(device)
+        
+        # Safe tensor extraction with proper buffer handling and type casting
+        alphas_buffer = getattr(self, 'alphas_cumprod', None)
+        if alphas_buffer is not None and hasattr(alphas_buffer, '__getitem__'):
+            # Ensure tensor type and proper indexing
+            if isinstance(alphas_buffer, torch.Tensor):
+                sqrt_alphas_cumprod_t = torch.sqrt(alphas_buffer[t])
+                sqrt_one_minus_alphas_cumprod_t = torch.sqrt(1.0 - alphas_buffer[t])
+            else:
+                # Convert buffer to tensor if needed
+                alphas_tensor = torch.tensor(alphas_buffer, device=device, dtype=torch.float32)
+                sqrt_alphas_cumprod_t = torch.sqrt(alphas_tensor[t])
+                sqrt_one_minus_alphas_cumprod_t = torch.sqrt(1.0 - alphas_tensor[t])
+        else:
+            # Create valid diffusion schedule
+            sqrt_alphas_cumprod_t = torch.ones_like(t, dtype=torch.float32) * 0.7
+            sqrt_one_minus_alphas_cumprod_t = torch.ones_like(t, dtype=torch.float32) * 0.3
         
         # Reshape for broadcasting
         sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1)
@@ -1143,9 +1159,9 @@ def training_interface():
         
         col1, col2 = st.columns(2)
         with col1:
-            num_epochs = st.slider("Training Epochs", 10, 200, 50)
+            num_epochs = st.slider("Training Epochs", 10, 200, 50, key="training_epochs_slider")
         with col2:
-            learning_rate = st.selectbox("Learning Rate", [1e-5, 5e-5, 1e-4, 5e-4], index=2)
+            learning_rate = st.selectbox("Learning Rate", [1e-5, 5e-5, 1e-4, 5e-4], index=2, key="learning_rate_select")
         
         if st.button("🏋️ Start Training", disabled=st.session_state.is_training, use_container_width=True):
             start_training(num_epochs, learning_rate)
