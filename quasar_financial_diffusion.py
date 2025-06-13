@@ -776,18 +776,22 @@ class QuasarTrainer:
 
 def initialize_session_state():
     """Initialize Streamlit session state."""
-    if 'system_info' not in st.session_state:
-        st.session_state.system_info = EnvironmentDetector.get_system_info()
-    if 'config' not in st.session_state:
-        st.session_state.config = EnvironmentDetector.optimize_for_hardware(st.session_state.system_info)
-    if 'trainer' not in st.session_state:
-        st.session_state.trainer = None
-    if 'tokenizer' not in st.session_state:
-        st.session_state.tokenizer = None
-    if 'dataset' not in st.session_state:
-        st.session_state.dataset = None
-    if 'is_training' not in st.session_state:
-        st.session_state.is_training = False
+    try:
+        if 'system_info' not in st.session_state:
+            st.session_state.system_info = EnvironmentDetector.get_system_info()
+        if 'config' not in st.session_state:
+            st.session_state.config = EnvironmentDetector.optimize_for_hardware(st.session_state.system_info)
+        if 'trainer' not in st.session_state:
+            st.session_state.trainer = None
+        if 'tokenizer' not in st.session_state:
+            st.session_state.tokenizer = None
+        if 'dataset' not in st.session_state:
+            st.session_state.dataset = None
+        if 'is_training' not in st.session_state:
+            st.session_state.is_training = False
+    except Exception as e:
+        # Handle case when running outside Streamlit context
+        pass
 
 
 def main():
@@ -1059,4 +1063,19 @@ def management_interface():
 
 
 if __name__ == "__main__":
-    main()
+    # Only run main() if we're in a Streamlit context
+    try:
+        import streamlit.runtime.scriptrunner as sr
+        if sr.get_script_run_ctx() is not None:
+            main()
+        else:
+            print("Quanta Quasar Financial Diffusion Model")
+            print("Run with: streamlit run quasar_financial_diffusion.py")
+    except:
+        # Fallback for different Streamlit versions
+        try:
+            main()
+        except Exception as e:
+            print("Quanta Quasar Financial Diffusion Model")
+            print("Run with: streamlit run quasar_financial_diffusion.py")
+            print(f"Error: {e}")
