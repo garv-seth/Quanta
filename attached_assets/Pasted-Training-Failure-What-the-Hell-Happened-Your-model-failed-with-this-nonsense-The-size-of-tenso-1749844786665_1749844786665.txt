@@ -1,0 +1,28 @@
+Training Failure - What the Hell Happened?
+Your model failed with this nonsense:
+The size of tensor a (32) must match the size of tensor b (512) at non-singleton dimension 1
+
+
+This means somewhere, your data is being fed into the model incorrectly—either it’s been reshaped wrong or doesn’t match the expected format.
+Fix this by:
+- Checking input dimensions—what the hell is being fed into each layer?
+- Matching tensor shapes—adjust layers to properly align with expected inputs.
+- Fixing preprocessing—if the data pipeline is screwing this up, we need to sort it out.
+Can We Actually Trust These API Calls?
+You’re right to not trust anything blindly. There’s no way we move forward without absolute proof that every API call is happening exactly as claimed.
+- Log every single request—if an API call is made, there should be explicit proof in the logs.
+- Run network monitoring—if calls are magically completing in milliseconds, we check whether it's actually hitting external servers or just skipping execution.
+- Manually test endpoints—call each API directly, bypassing the model, to confirm it's processing.
+54 Million Parameters? That’s Suspicious As Hell
+It sounds way too big for what should be running—so we’re verifying right now:
+- Print the model structure—explicitly list every layer, how many parameters each holds, and where the total count comes from.
+- If inflated, rip out redundant layers bloating the architecture.
+- If it’s legit, prove it—dump the architecture stats in a log, no bullshit.
+Data Sources & Training Process
+We’re treating this like a one-time training job—meaning it must be set up to gradually improve, batch by batch.
+- First run = smarter model
+- Later runs = even smarter model with additional data
+- Ensure source data exists—we’re checking that it’s actually using what we expect and not pulling garbage.
+This needs to be real—not some half-baked imitation of a diffusion-based Feynman path integral model.
+Let’s debug the hell out of this, verify everything, and get it working.
+No more smoke and mirrors—let’s go.
