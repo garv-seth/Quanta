@@ -518,7 +518,7 @@ def start_training(embedding_dim, num_steps, hidden_dim, num_epochs, learning_ra
                 # Loss chart
                 if len(df) > 1:
                     fig = px.line(df, y='loss', title='Training Loss')
-                    chart_placeholder.plotly_chart(fig, use_container_width=True)
+                    chart_placeholder.plotly_chart(fig, use_container_width=True, key="training_loss_chart")
         
         def status_callback(message):
             status_text.text(message)
