@@ -9,10 +9,10 @@ import os
 import json
 from datetime import datetime
 
-# from models.diffusion_model import DiffusionModel
-# from utils.text_processor import TextProcessor
-# from utils.training import ModelTrainer
-# from utils.evaluation import ModelEvaluator
+from models.diffusion_model import DiffusionModel
+from utils.text_processor import TextProcessor
+from utils.training import ModelTrainer
+from utils.evaluation import ModelEvaluator
 
 # Set page configuration
 st.set_page_config(
@@ -25,12 +25,12 @@ st.set_page_config(
 # Initialize session state
 if 'model' not in st.session_state:
     st.session_state.model = None
-if 'text_processor' not in st.session_state:
-    st.session_state.text_processor = None
+if 'text_processor' not in st.session_state or st.session_state.text_processor is None:
+    st.session_state.text_processor = TextProcessor()
 if 'trainer' not in st.session_state:
     st.session_state.trainer = None
-if 'evaluator' not in st.session_state:
-    st.session_state.evaluator = None
+if 'evaluator' not in st.session_state or st.session_state.evaluator is None:
+    st.session_state.evaluator = ModelEvaluator()
 if 'training_history' not in st.session_state:
     st.session_state.training_history = []
 
@@ -133,6 +133,10 @@ def refine_text(input_text, noise_level, num_steps):
         # Convert text to embedding
         embedding = st.session_state.text_processor.text_to_embedding(input_text)
         
+        # Ensure embedding is on the same device as the model
+        device = next(st.session_state.model.parameters()).device
+        embedding = embedding.to(device)
+        
         # Add initial noise
         noise = torch.randn_like(embedding) * noise_level
         noisy_embedding = embedding + noise
@@ -140,12 +144,12 @@ def refine_text(input_text, noise_level, num_steps):
         # Perform denoising steps
         with torch.no_grad():
             for step in range(num_steps):
-                t = torch.tensor([step], dtype=torch.float32)
-                predicted_noise = st.session_state.model(noisy_embedding.unsqueeze(0), t)
+                t = torch.tensor([step], dtype=torch.long, device=device)
+                predicted_noise = st.session_state.model(noisy_embedding, t)
                 
                 # Remove predicted noise
                 alpha = 1.0 - (step / num_steps)
-                noisy_embedding = noisy_embedding - alpha * predicted_noise.squeeze(0)
+                noisy_embedding = noisy_embedding - alpha * predicted_noise
         
         # Convert back to text
         refined_text = st.session_state.text_processor.embedding_to_text(noisy_embedding)
