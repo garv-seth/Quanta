@@ -29,16 +29,15 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 
-# Import Quasar Small model
+# Import Quasar Small model (simplified version)
 try:
-    from models.quasar_small import QuasarSmall
-    from models.quasar_trainer import QuasarTrainer, QuasarModelFactory
+    from models.quasar_simple import QuasarSimple, SimpleQuasarTrainer, SimpleQuasarFactory
     QUASAR_AVAILABLE = True
 except ImportError:
     QUASAR_AVAILABLE = False
-    QuasarSmall = None
-    QuasarTrainer = None
-    QuasarModelFactory = None
+    QuasarSimple = None
+    SimpleQuasarTrainer = None
+    SimpleQuasarFactory = None
 
 # Import our modules with individual error handling
 ADVANCED_MODULES_AVAILABLE = True
@@ -578,11 +577,10 @@ def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_le
     """Train Quasar Small model with advanced diffusion techniques"""
     try:
         # Create model based on size selection
-        device = "cpu"  # Use CPU for compatibility
         if model_size == "Small (Fast Training)":
-            model = QuasarModelFactory.create_small_model(device)
+            model = SimpleQuasarFactory.create_small_model()
         else:
-            model = QuasarModelFactory.create_medium_model(device)
+            model = SimpleQuasarFactory.create_medium_model()
         
         st.session_state.quasar_model = model
         
@@ -618,15 +616,10 @@ def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_le
         
         # Create trainer
         trainer_config = {
-            'learning_rate': learning_rate,
-            'weight_decay': 0.01,
-            'warmup_steps': 100,
-            'max_grad_norm': 1.0,
-            'accumulation_steps': 1,
-            'use_mixed_precision': False
+            'learning_rate': learning_rate
         }
         
-        trainer = QuasarModelFactory.create_trainer(model, trainer_config)
+        trainer = SimpleQuasarFactory.create_trainer(model, trainer_config)
         
         # Training progress tracking
         progress_bar = st.progress(0)

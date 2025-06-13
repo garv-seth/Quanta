@@ -31,7 +31,7 @@ class RotaryPositionalEmbedding(nn.Module):
         self.max_seq_len = max_seq_len
         
         # Precompute frequencies
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
+        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
         self.register_buffer('inv_freq', inv_freq)
         
         # Cache for efficiency
@@ -42,10 +42,10 @@ class RotaryPositionalEmbedding(nn.Module):
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         seq_len = x.shape[-2]
         
-        if seq_len != self._seq_len_cached:
+        if seq_len != self._seq_len_cached or self._cos_cached is None:
             self._seq_len_cached = seq_len
-            t = torch.arange(seq_len, device=x.device, dtype=self.inv_freq.dtype)
-            freqs = torch.outer(t, self.inv_freq)
+            t = torch.arange(seq_len, device=x.device, dtype=torch.float32)
+            freqs = torch.outer(t, self.inv_freq.to(x.device))
             emb = torch.cat((freqs, freqs), dim=-1)
             self._cos_cached = emb.cos()[None, None, :, :]
             self._sin_cached = emb.sin()[None, None, :, :]
