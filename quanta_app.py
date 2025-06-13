@@ -196,11 +196,11 @@ def authenticate_user():
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Manual authentication for testing
-            if st.button("🧪 Demo Mode (Skip Auth)", help="For testing purposes"):
+            # Guest access option
+            if st.button("👤 Continue as Guest", help="Limited features available"):
                 st.session_state.user_authenticated = True
-                st.session_state.user_id = "demo_user_123"
-                st.session_state.user_name = "Demo User"
+                st.session_state.user_id = "guest_user"
+                st.session_state.user_name = "Guest"
                 st.session_state.user_models = {}
                 st.rerun()
 
