@@ -35,10 +35,18 @@ FinancialDiffusionLLM = None
 SimpleTextProcessor = None
 
 try:
+    from models.simple_financial_diffusion import SimpleFinancialDiffusion
+    DIFFUSION_MODEL_AVAILABLE = True
+except ImportError as e:
+    DIFFUSION_MODEL_AVAILABLE = False
+    SimpleFinancialDiffusion = None
+
+try:
     from models.advanced.financial_diffusion_llm import FinancialDiffusionLLM
     ADVANCED_MODULES_AVAILABLE = True
 except ImportError as e:
     ADVANCED_MODULES_AVAILABLE = False
+    FinancialDiffusionLLM = None
 
 try:
     from utils.simple_text_processor import SimpleTextProcessor
@@ -148,7 +156,7 @@ def collect_real_financial_data():
                     'previous_value': float(prev['Close']),
                     'change_percent': float(change),
                     'volume': int(latest['Volume']) if 'Volume' in latest.index else 0,
-                    'analysis_date': hist.index[-1].isoformat(),
+                    'analysis_date': str(hist.index[-1]),
                     'collected_at': datetime.now().isoformat()
                 }
                 collected_data['market_indicators'].append(indicator_data)
@@ -388,32 +396,79 @@ def collect_financial_data(collect_companies, collect_news, collect_sec, collect
 
 def show_recent_data():
     """Display recent financial data"""
-    if not st.session_state.data_manager:
-        return
-    
-    try:
-        recent_data = st.session_state.data_manager.get_recent_financial_data(limit=10)
+    if hasattr(st.session_state, 'collected_financial_data') and st.session_state.collected_financial_data:
+        data = st.session_state.collected_financial_data
         
-        # Recent companies
-        if recent_data['companies']:
-            st.subheader("Recent Companies")
-            companies_df = pd.DataFrame(recent_data['companies'])
-            st.dataframe(companies_df, use_container_width=True)
+        # Display companies
+        if data.get('companies'):
+            st.subheader("📊 Live Company Data from Yahoo Finance")
+            companies_df = pd.DataFrame(data['companies'])
+            
+            # Show key metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                avg_market_cap = companies_df['market_cap'].mean() if 'market_cap' in companies_df.columns else 0
+                st.metric("Avg Market Cap", f"${avg_market_cap:,.0f}")
+            with col2:
+                total_companies = len(companies_df)
+                st.metric("Companies", total_companies)
+            with col3:
+                sectors = companies_df['sector'].nunique() if 'sector' in companies_df.columns else 0
+                st.metric("Sectors", sectors)
+            
+            st.dataframe(companies_df[['symbol', 'company_name', 'sector', 'market_cap']], use_container_width=True)
         
-        # Recent news
-        if recent_data['news']:
-            st.subheader("Recent News")
-            news_df = pd.DataFrame(recent_data['news'])
-            st.dataframe(news_df, use_container_width=True)
+        # Display market indicators
+        if data.get('market_indicators'):
+            st.subheader("📈 Live Market Indicators")
+            market_df = pd.DataFrame(data['market_indicators'])
+            
+            for _, indicator in market_df.iterrows():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.metric(
+                        indicator['indicator'],
+                        f"{indicator['current_value']:.2f}",
+                        f"{indicator['change_percent']:.2f}%"
+                    )
+                with col2:
+                    if indicator['change_percent'] > 0:
+                        st.success("📈")
+                    else:
+                        st.error("📉")
         
-        # Market indicators
-        if recent_data['market_indicators']:
-            st.subheader("Market Indicators")
-            market_df = pd.DataFrame(recent_data['market_indicators'])
-            st.dataframe(market_df, use_container_width=True)
-    
-    except Exception as e:
-        st.error(f"Error displaying recent data: {str(e)}")
+        # Display news
+        if data.get('news'):
+            st.subheader("📰 Latest Financial News")
+            news_df = pd.DataFrame(data['news'])
+            
+            for _, news in news_df.iterrows():
+                with st.expander(f"📰 {news['title'][:100]}..."):
+                    st.write(f"**Source:** {news['source']}")
+                    st.write(f"**Published:** {news['published']}")
+                    if news['summary']:
+                        st.write(f"**Summary:** {news['summary']}")
+                    if news['link']:
+                        st.write(f"[Read full article]({news['link']})")
+        
+        # Display training data preview
+        if hasattr(st.session_state, 'training_data') and st.session_state.training_data:
+            st.subheader("🧠 Training Data Preview")
+            st.info(f"Total training texts prepared: {len(st.session_state.training_data)}")
+            
+            # Show first few training texts
+            with st.expander("View Sample Training Texts"):
+                for i, text in enumerate(st.session_state.training_data[:5]):
+                    st.write(f"**Text {i+1}:** {text[:200]}...")
+    else:
+        st.warning("No financial data collected yet. Please collect data first from the Data Collection page.")
+        if st.button("Collect Live Data Now"):
+            # Collect real data
+            dataset = collect_real_financial_data()
+            st.session_state.collected_financial_data = dataset
+            training_texts = extract_training_texts_from_data(dataset)
+            st.session_state.training_data = training_texts
+            st.rerun()
 
 def model_training_page():
     st.header("🚀 Advanced Model Training")
@@ -453,21 +508,27 @@ def model_training_page():
                 display_advanced_training_history()
 
 def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_length, num_epochs, use_database):
-    """Train the advanced financial diffusion LLM"""
+    """Train the financial diffusion model"""
     try:
-        if not ADVANCED_MODULES_AVAILABLE or not FinancialDiffusionLLM:
-            st.error("Advanced model not available. Please check module dependencies.")
+        # Use simplified diffusion model if available
+        if DIFFUSION_MODEL_AVAILABLE and SimpleFinancialDiffusion:
+            st.session_state.advanced_model = SimpleFinancialDiffusion(
+                vocab_size=vocab_size,
+                embedding_dim=d_model,
+                num_steps=50
+            )
+        elif ADVANCED_MODULES_AVAILABLE and FinancialDiffusionLLM:
+            st.session_state.advanced_model = FinancialDiffusionLLM(
+                vocab_size=vocab_size,
+                d_model=d_model,
+                num_heads=num_heads,
+                num_layers=num_layers,
+                max_seq_length=max_seq_length,
+                num_diffusion_steps=1000
+            )
+        else:
+            st.error("No diffusion model available for training")
             return
-            
-        # Initialize model
-        st.session_state.advanced_model = FinancialDiffusionLLM(
-            vocab_size=vocab_size,
-            d_model=d_model,
-            num_heads=num_heads,
-            num_layers=num_layers,
-            max_seq_length=max_seq_length,
-            num_diffusion_steps=1000
-        )
         
         # Get training data
         if use_database and st.session_state.training_data:
@@ -622,7 +683,7 @@ def text_refinement_interface():
                 try:
                     refined_text = st.session_state.advanced_model.refine_text(
                         input_text, 
-                        num_inference_steps
+                        num_steps=num_inference_steps
                     )
                     
                     st.text_area(
@@ -695,8 +756,7 @@ def text_generation_interface():
                 try:
                     generated_text = st.session_state.advanced_model.generate_text(
                         prompt_text,
-                        max_length,
-                        num_inference_steps
+                        max_length=max_length
                     )
                     
                     st.text_area(
