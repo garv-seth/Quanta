@@ -592,9 +592,10 @@ class QuantumInspiredFinancialDiffusionModel(nn.Module):
         self.register_buffer('alphas', alphas)
         self.register_buffer('alphas_cumprod', alphas_cumprod)
         
-        # Path interference matrix for quantum superposition
-        self.register_buffer('interference_matrix', 
-                           torch.randn(num_paths, num_paths) / math.sqrt(num_paths))
+        # Path interference matrix for quantum superposition - use Parameter for proper gradients
+        self.interference_matrix = nn.Parameter(
+            torch.randn(num_paths, num_paths) / math.sqrt(num_paths)
+        )
         
     def _quantum_inspired_beta_schedule(self, s=0.008):
         """Quantum-inspired noise schedule with interference patterns."""
@@ -657,7 +658,7 @@ class QuantumInspiredFinancialDiffusionModel(nn.Module):
         path_weights = self.path_weighting(combined_flat)  # [batch, num_paths]
         
         # Apply interference matrix for quantum superposition
-        # Direct tensor access since it's registered as buffer
+        # Direct parameter access for proper tensor multiplication
         interference = torch.matmul(path_weights.unsqueeze(1), self.interference_matrix).squeeze(1)
         interference = F.softmax(interference, dim=-1)
         
@@ -678,8 +679,10 @@ class QuantumInspiredFinancialDiffusionModel(nn.Module):
         if noise is None:
             noise = torch.randn_like(x_start.float())
         
-        sqrt_alphas_cumprod_t = self.alphas_cumprod[t] ** 0.5
-        sqrt_one_minus_alphas_cumprod_t = (1.0 - self.alphas_cumprod[t]) ** 0.5
+        # Use proper tensor indexing for diffusion schedule
+        alphas_cumprod = self.alphas_cumprod.to(x_start.device)
+        sqrt_alphas_cumprod_t = torch.sqrt(alphas_cumprod[t])
+        sqrt_one_minus_alphas_cumprod_t = torch.sqrt(1.0 - alphas_cumprod[t])
         
         # Reshape for broadcasting
         sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1)
