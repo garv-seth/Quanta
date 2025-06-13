@@ -53,6 +53,14 @@ try:
 except ImportError as e:
     SimpleTextProcessor = None
 
+try:
+    from database.real_data_manager import RealFinancialDataManager
+    from database.init_db import setup_database
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    DATABASE_AVAILABLE = False
+    RealFinancialDataManager = None
+
 # Simplified data manager for database operations
 class SimpleDataManager:
     def __init__(self):
@@ -237,7 +245,17 @@ def extract_training_texts_from_data(data):
 if 'advanced_model' not in st.session_state:
     st.session_state.advanced_model = None
 if 'data_manager' not in st.session_state:
-    st.session_state.data_manager = SimpleDataManager()
+    # Try to use real database manager first
+    if DATABASE_AVAILABLE and RealFinancialDataManager:
+        try:
+            st.session_state.data_manager = RealFinancialDataManager()
+            st.session_state.database_connected = True
+        except Exception as e:
+            st.session_state.data_manager = SimpleDataManager()
+            st.session_state.database_connected = False
+    else:
+        st.session_state.data_manager = SimpleDataManager()
+        st.session_state.database_connected = False
 if 'training_data' not in st.session_state:
     st.session_state.training_data = []
 if 'model_trained' not in st.session_state:
@@ -345,26 +363,39 @@ def data_collection_page():
 
 def collect_financial_data(collect_companies, collect_news, collect_sec, collect_market, num_companies):
     """Collect financial data from various sources"""
-    with st.spinner("Collecting live financial data from Yahoo Finance and news APIs..."):
+    with st.spinner("Collecting live financial data from Yahoo Finance and storing in PostgreSQL..."):
         try:
-            # Collect real financial data
-            dataset = collect_real_financial_data()
-            
-            counts = {
-                'companies': len(dataset.get('companies', [])),
-                'news': len(dataset.get('news', [])),
-                'sec_filings': 0,  # Not implemented yet
-                'market_indicators': len(dataset.get('market_indicators', []))
-            }
-            
-            # Extract training texts from real data
-            training_texts = extract_training_texts_from_data(dataset)
-            st.session_state.training_data = training_texts
-            
-            # Store collected data for display
-            st.session_state.collected_financial_data = dataset
-            
-            st.success("Live financial data collection completed!")
+            if st.session_state.database_connected and hasattr(st.session_state.data_manager, 'collect_all_live_data'):
+                # Use real database collection
+                counts = st.session_state.data_manager.collect_all_live_data()
+                
+                # Get training texts from database
+                training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
+                st.session_state.training_data = training_texts
+                
+                # Get recent data for display
+                recent_data = st.session_state.data_manager.get_recent_financial_data(limit=50)
+                st.session_state.collected_financial_data = recent_data
+                
+                st.success("Live financial data collected and stored in PostgreSQL database!")
+                
+            else:
+                # Fallback to in-memory collection
+                dataset = collect_real_financial_data()
+                
+                counts = {
+                    'companies': len(dataset.get('companies', [])),
+                    'news': len(dataset.get('news', [])),
+                    'sec_filings': 0,
+                    'market_indicators': len(dataset.get('market_indicators', []))
+                }
+                
+                training_texts = extract_training_texts_from_data(dataset)
+                st.session_state.training_data = training_texts
+                st.session_state.collected_financial_data = dataset
+                
+                st.success("Live financial data collected!")
+                st.info("Database not connected - using in-memory storage")
             
             # Display results
             col1, col2, col3, col4 = st.columns(4)
@@ -382,7 +413,7 @@ def collect_financial_data(collect_companies, collect_news, collect_sec, collect
             
         except Exception as e:
             st.error(f"Data collection failed: {str(e)}")
-            # Fallback to sample data
+            # Final fallback to sample data
             counts = st.session_state.data_manager.collect_and_store_sample_data()
             training_texts = st.session_state.data_manager.prepare_sample_training_texts()
             st.session_state.training_data = training_texts
@@ -878,48 +909,138 @@ def load_saved_model(filename):
         st.error(f"Failed to load model: {str(e)}")
 
 def database_analytics_page():
-    st.header("📈 Database Analytics")
+    st.header("📊 Database Analytics & Management")
     
-    if not st.session_state.data_manager:
-        st.error("Database not connected")
-        return
+    # Database connection status
+    col1, col2, col3 = st.columns(3)
     
-    try:
-        # Get statistics
-        stats = st.session_state.data_manager.get_training_statistics()
-        
-        if stats:
-            # Overview metrics
-            st.subheader("Data Overview")
+    with col1:
+        if getattr(st.session_state, 'database_connected', False):
+            st.success("PostgreSQL Connected")
+        else:
+            st.warning("Using In-Memory Storage")
+    
+    with col2:
+        if st.button("🔄 Refresh Connection"):
+            st.session_state.data_manager = None
+            st.rerun()
+    
+    with col3:
+        if st.button("🗄️ Initialize Database"):
+            try:
+                if DATABASE_AVAILABLE:
+                    from database.init_db import setup_database
+                    success = setup_database()
+                    if success:
+                        st.success("Database initialized successfully!")
+                    else:
+                        st.error("Database initialization failed")
+                else:
+                    st.error("Database modules not available")
+            except Exception as e:
+                st.error(f"Database initialization error: {str(e)}")
+    
+    # Database statistics
+    if hasattr(st.session_state.data_manager, 'get_training_statistics'):
+        try:
+            stats = st.session_state.data_manager.get_training_statistics()
             
-            col1, col2, col3, col4 = st.columns(4)
+            st.subheader("📈 Database Statistics")
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
             
             with col1:
-                st.metric("Total Companies", stats.get('total_companies', 0))
-                st.metric("Total News", stats.get('total_news', 0))
-            
+                st.metric("Companies", stats.get('total_companies', 0))
             with col2:
-                st.metric("Earnings Records", stats.get('total_earnings', 0))
-                st.metric("SEC Filings", stats.get('total_sec_filings', 0))
-            
+                st.metric("News Articles", stats.get('total_news', 0))
             with col3:
                 st.metric("Market Indicators", stats.get('total_market_indicators', 0))
-                st.metric("Training Texts", stats.get('total_training_texts', 0))
-            
             with col4:
+                st.metric("Training Texts", stats.get('total_training_texts', 0))
+            with col5:
                 st.metric("Model Checkpoints", stats.get('total_model_checkpoints', 0))
-                total_data_points = sum([v for k, v in stats.items() if k.startswith('total_')])
-                st.metric("Total Data Points", total_data_points)
-            
-            # Data refresh
-            if st.button("🔄 Refresh Analytics"):
-                st.rerun()
-        
-        else:
-            st.warning("No data available. Please collect data first.")
+                
+        except Exception as e:
+            st.error(f"Error loading database statistics: {str(e)}")
     
-    except Exception as e:
-        st.error(f"Error loading analytics: {str(e)}")
+    # Recent data overview
+    if hasattr(st.session_state.data_manager, 'get_recent_financial_data'):
+        try:
+            st.subheader("📊 Recent Financial Data")
+            
+            recent_data = st.session_state.data_manager.get_recent_financial_data(limit=10)
+            
+            # Recent companies
+            if recent_data.get('companies'):
+                st.write("**Recent Companies:**")
+                companies_df = pd.DataFrame(recent_data['companies'])
+                st.dataframe(companies_df, use_container_width=True)
+            
+            # Recent market indicators
+            if recent_data.get('market_indicators'):
+                st.write("**Market Indicators:**")
+                indicators_df = pd.DataFrame(recent_data['market_indicators'])
+                st.dataframe(indicators_df, use_container_width=True)
+            
+            # Recent news
+            if recent_data.get('news'):
+                st.write("**Recent News Headlines:**")
+                for news in recent_data['news'][:5]:
+                    st.write(f"• {news['title'][:100]}...")
+                    
+        except Exception as e:
+            st.error(f"Error loading recent data: {str(e)}")
+    
+    # Database management actions
+    st.subheader("🛠️ Database Management")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📥 Collect Live Data"):
+            if hasattr(st.session_state.data_manager, 'collect_all_live_data'):
+                try:
+                    with st.spinner("Collecting live financial data..."):
+                        results = st.session_state.data_manager.collect_all_live_data()
+                        st.success(f"Data collected: {results}")
+                except Exception as e:
+                    st.error(f"Data collection failed: {str(e)}")
+            else:
+                st.warning("Live data collection not available")
+    
+    with col2:
+        if st.button("🧠 Prepare Training Data"):
+            if hasattr(st.session_state.data_manager, 'prepare_training_texts_from_db'):
+                try:
+                    with st.spinner("Preparing training texts..."):
+                        texts = st.session_state.data_manager.prepare_training_texts_from_db()
+                        st.session_state.training_data = texts
+                        st.success(f"Prepared {len(texts)} training texts")
+                except Exception as e:
+                    st.error(f"Training data preparation failed: {str(e)}")
+            else:
+                st.warning("Database training data preparation not available")
+    
+    with col3:
+        if st.button("🗂️ Export Data"):
+            st.info("Data export functionality coming soon")
+    
+    # Connection details
+    if getattr(st.session_state, 'database_connected', False):
+        st.subheader("🔗 Database Connection Info")
+        db_url = os.getenv('DATABASE_URL', 'Not available')
+        if db_url != 'Not available':
+            try:
+                import urllib.parse as urlparse
+                url = urlparse.urlparse(db_url)
+                st.write(f"**Host:** {url.hostname}")
+                st.write(f"**Port:** {url.port}")
+                st.write(f"**Database:** {url.path[1:] if url.path else 'Unknown'}")
+                st.write(f"**User:** {url.username}")
+            except:
+                st.write("Connection details not available")
+    
+
 
 if __name__ == "__main__":
     main()
