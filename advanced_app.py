@@ -627,7 +627,7 @@ def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_len
                     performance_metrics={"final_loss": losses[-1] if losses else 0.0, "training_texts_count": len(training_texts)},
                     epoch=num_epochs,
                     loss=losses[-1] if losses else 0.0,
-                    checkpoint_path=f"database_checkpoint_{checkpoint_id}",
+                    checkpoint_path=f"database_checkpoint_{checkpoint_name}",
                     is_best=True
                 )
                 st.success(f"Training completed! Model saved to PostgreSQL database (ID: {checkpoint_id})")
