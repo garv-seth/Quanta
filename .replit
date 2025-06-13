@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Quanta Fixed App"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -18,16 +18,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Advanced Financial Diffusion Model"
-
-[[workflows.workflow]]
-name = "Advanced Financial Diffusion Model"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run advanced_app.py --server.port 5000"
-waitForPort = 5000
+args = "Production Training System"
 
 [[workflows.workflow]]
 name = "Quanta App"
@@ -55,6 +46,15 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "streamlit run quanta_app.py --server.port 5000"
+
+[[workflows.workflow]]
+name = "Production Training System"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run train_production_model.py --server.port 5000"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
