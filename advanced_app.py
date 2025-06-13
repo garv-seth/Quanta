@@ -1,4 +1,13 @@
 import streamlit as st
+
+# Set page configuration first
+st.set_page_config(
+    page_title="Advanced Financial Diffusion LLM",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 import numpy as np
 import pandas as pd
 import sys
@@ -14,10 +23,205 @@ sys.path.append('./data_collection')
 sys.path.append('./database')
 sys.path.append('./utils/database')
 
-# Import our modules
-from models.advanced.financial_diffusion_llm import FinancialDiffusionLLM
-from data_collection.financial_data_collector import collect_comprehensive_dataset
-from utils.database.data_manager import FinancialDataManager
+# Import data collection functions directly
+import yfinance as yf
+import requests
+import feedparser
+from bs4 import BeautifulSoup
+
+# Import our modules with individual error handling
+ADVANCED_MODULES_AVAILABLE = True
+FinancialDiffusionLLM = None
+SimpleTextProcessor = None
+
+try:
+    from models.advanced.financial_diffusion_llm import FinancialDiffusionLLM
+    ADVANCED_MODULES_AVAILABLE = True
+except ImportError as e:
+    ADVANCED_MODULES_AVAILABLE = False
+
+try:
+    from utils.simple_text_processor import SimpleTextProcessor
+except ImportError as e:
+    SimpleTextProcessor = None
+
+# Simplified data manager for database operations
+class SimpleDataManager:
+    def __init__(self):
+        self.db_connected = False
+        try:
+            import os
+            from database.schema import DatabaseManager
+            self.db_manager = DatabaseManager()
+            self.db_manager.create_tables()
+            self.db_connected = True
+        except Exception as e:
+            st.warning(f"Database connection failed: {e}")
+    
+    def collect_and_store_sample_data(self):
+        """Generate sample financial data for training"""
+        return {
+            'companies': 10,
+            'news': 25,
+            'sec_filings': 5,
+            'market_indicators': 4
+        }
+    
+    def prepare_sample_training_texts(self):
+        """Return sample financial training texts"""
+        return [
+            "The company reported strong quarterly earnings with revenue growth of 15% year-over-year and improved operating margins across all business segments.",
+            "Market volatility increased following Federal Reserve policy announcements regarding interest rate adjustments and inflation concerns.",
+            "Investment portfolio performance exceeded expectations with returns of 12% driven by strategic asset allocation and risk management practices.",
+            "Operating cash flow remained robust at $250 million supporting continued business expansion and shareholder return initiatives.",
+            "The merger and acquisition strategy strengthened market position while achieving cost synergies and operational efficiencies.",
+            "Financial results demonstrated resilience despite challenging economic conditions with stable revenue and improved profit margins.",
+            "Strategic investments in technology and innovation delivered measurable returns through automation and operational improvements.",
+            "Balance sheet fundamentals remained strong with improved debt-to-equity ratios and enhanced liquidity positions.",
+            "Risk management protocols effectively mitigated market exposure while maintaining growth opportunities and competitive advantages.",
+            "Quarterly guidance reflects management confidence in sustainable business model and long-term value creation strategies."
+        ]
+    
+    def get_training_statistics(self):
+        """Return sample statistics"""
+        return {
+            'total_companies': 50,
+            'total_news': 150,
+            'total_earnings': 25,
+            'total_sec_filings': 15,
+            'total_market_indicators': 20,
+            'total_training_texts': 100,
+            'total_model_checkpoints': 3
+        }
+
+# Real financial data collection functions
+def collect_real_financial_data():
+    """Collect real financial data using Yahoo Finance and news APIs"""
+    collected_data = {
+        'companies': [],
+        'news': [],
+        'market_indicators': []
+    }
+    
+    # Major S&P 500 companies for data collection
+    major_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'JNJ', 'V']
+    
+    # Collect company data
+    for symbol in major_symbols:
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            company_data = {
+                'symbol': symbol,
+                'company_name': info.get('longName', symbol),
+                'sector': info.get('sector', 'Unknown'),
+                'industry': info.get('industry', 'Unknown'),
+                'business_summary': info.get('longBusinessSummary', ''),
+                'market_cap': info.get('marketCap', 0),
+                'revenue': info.get('totalRevenue', 0),
+                'collected_at': datetime.now().isoformat()
+            }
+            collected_data['companies'].append(company_data)
+            
+        except Exception as e:
+            st.warning(f"Error collecting data for {symbol}: {str(e)}")
+            continue
+    
+    # Collect market indicators
+    indices = ['^GSPC', '^DJI', '^IXIC', '^VIX']
+    
+    for index in indices:
+        try:
+            ticker = yf.Ticker(index)
+            hist = ticker.history(period='2d')
+            
+            if not hist.empty:
+                latest = hist.iloc[-1]
+                prev = hist.iloc[-2] if len(hist) > 1 else latest
+                
+                change = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
+                
+                indicator_data = {
+                    'indicator': index,
+                    'current_value': float(latest['Close']),
+                    'previous_value': float(prev['Close']),
+                    'change_percent': float(change),
+                    'volume': int(latest['Volume']) if 'Volume' in latest.index else 0,
+                    'analysis_date': hist.index[-1].isoformat(),
+                    'collected_at': datetime.now().isoformat()
+                }
+                collected_data['market_indicators'].append(indicator_data)
+                
+        except Exception as e:
+            st.warning(f"Error collecting market data for {index}: {str(e)}")
+            continue
+    
+    # Collect financial news
+    try:
+        # Try Yahoo Finance RSS feed
+        feed = feedparser.parse('https://feeds.finance.yahoo.com/rss/2.0/headline')
+        
+        for entry in feed.entries[:10]:
+            news_item = {
+                'title': entry.get('title', ''),
+                'summary': entry.get('summary', ''),
+                'link': entry.get('link', ''),
+                'published': entry.get('published', ''),
+                'source': 'Yahoo Finance',
+                'collected_at': datetime.now().isoformat()
+            }
+            collected_data['news'].append(news_item)
+            
+    except Exception as e:
+        st.warning(f"Error collecting news: {str(e)}")
+    
+    return collected_data
+
+def extract_training_texts_from_data(data):
+    """Extract training texts from collected financial data"""
+    training_texts = []
+    
+    # Extract from company business summaries
+    for company in data.get('companies', []):
+        summary = company.get('business_summary', '')
+        if summary and len(summary.split()) > 10:
+            training_texts.append(summary)
+            
+            # Create additional training text from company data
+            market_cap = company.get('market_cap', 0)
+            revenue = company.get('revenue', 0)
+            
+            if market_cap and revenue:
+                performance_text = f"{company.get('company_name', '')} operates in the {company.get('sector', '')} sector with a market capitalization of ${market_cap:,.0f} and annual revenue of ${revenue:,.0f}."
+                training_texts.append(performance_text)
+    
+    # Extract from news
+    for news in data.get('news', []):
+        title = news.get('title', '')
+        summary = news.get('summary', '')
+        
+        if title and len(title.split()) > 5:
+            training_texts.append(title)
+        if summary and len(summary.split()) > 10:
+            training_texts.append(summary)
+    
+    # Create market analysis texts
+    for indicator in data.get('market_indicators', []):
+        change_pct = indicator.get('change_percent', 0)
+        indicator_name = indicator.get('indicator', '')
+        current_value = indicator.get('current_value', 0)
+        
+        if change_pct > 0:
+            market_text = f"The {indicator_name} index gained {change_pct:.2f}% to close at {current_value:.2f}, reflecting positive market sentiment and investor confidence."
+        elif change_pct < 0:
+            market_text = f"The {indicator_name} index declined {abs(change_pct):.2f}% to {current_value:.2f}, indicating market volatility and cautious investor behavior."
+        else:
+            market_text = f"The {indicator_name} index remained stable at {current_value:.2f}, showing balanced market conditions."
+        
+        training_texts.append(market_text)
+    
+    return [text for text in training_texts if text and len(text.split()) > 5]
 
 # Set page configuration
 st.set_page_config(
@@ -31,7 +235,7 @@ st.set_page_config(
 if 'advanced_model' not in st.session_state:
     st.session_state.advanced_model = None
 if 'data_manager' not in st.session_state:
-    st.session_state.data_manager = None
+    st.session_state.data_manager = SimpleDataManager()
 if 'training_data' not in st.session_state:
     st.session_state.training_data = []
 if 'model_trained' not in st.session_state:
@@ -62,12 +266,10 @@ def main():
             st.warning("⚠️ Model Not Trained")
         
         # Database status
-        try:
-            if st.session_state.data_manager is None:
-                st.session_state.data_manager = FinancialDataManager()
+        if st.session_state.data_manager and st.session_state.data_manager.db_connected:
             st.success("✅ Database Connected")
-        except Exception as e:
-            st.error(f"❌ Database Error: {str(e)}")
+        else:
+            st.warning("⚠️ Using Sample Data")
     
     # Route to selected page
     if page == "Data Collection":
@@ -141,15 +343,26 @@ def data_collection_page():
 
 def collect_financial_data(collect_companies, collect_news, collect_sec, collect_market, num_companies):
     """Collect financial data from various sources"""
-    if not st.session_state.data_manager:
-        st.session_state.data_manager = FinancialDataManager()
-    
-    with st.spinner("Collecting financial data..."):
+    with st.spinner("Collecting live financial data from Yahoo Finance and news APIs..."):
         try:
-            # Collect and store data
-            counts = st.session_state.data_manager.collect_and_store_data()
+            # Collect real financial data
+            dataset = collect_real_financial_data()
             
-            st.success("Data collection completed!")
+            counts = {
+                'companies': len(dataset.get('companies', [])),
+                'news': len(dataset.get('news', [])),
+                'sec_filings': 0,  # Not implemented yet
+                'market_indicators': len(dataset.get('market_indicators', []))
+            }
+            
+            # Extract training texts from real data
+            training_texts = extract_training_texts_from_data(dataset)
+            st.session_state.training_data = training_texts
+            
+            # Store collected data for display
+            st.session_state.collected_financial_data = dataset
+            
+            st.success("Live financial data collection completed!")
             
             # Display results
             col1, col2, col3, col4 = st.columns(4)
@@ -163,15 +376,15 @@ def collect_financial_data(collect_companies, collect_news, collect_sec, collect
             with col4:
                 st.metric("Market Indicators", counts.get('market_indicators', 0))
             
-            # Prepare training data
-            with st.spinner("Preparing training texts..."):
-                training_texts = st.session_state.data_manager.prepare_training_texts()
-                st.session_state.training_data = training_texts
-                
-                st.info(f"Prepared {len(training_texts)} training texts from collected data")
+            st.info(f"Prepared {len(st.session_state.training_data)} training texts from live data")
             
         except Exception as e:
             st.error(f"Data collection failed: {str(e)}")
+            # Fallback to sample data
+            counts = st.session_state.data_manager.collect_and_store_sample_data()
+            training_texts = st.session_state.data_manager.prepare_sample_training_texts()
+            st.session_state.training_data = training_texts
+            st.warning("Using sample data due to collection error")
 
 def show_recent_data():
     """Display recent financial data"""
@@ -242,6 +455,10 @@ def model_training_page():
 def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_length, num_epochs, use_database):
     """Train the advanced financial diffusion LLM"""
     try:
+        if not ADVANCED_MODULES_AVAILABLE or not FinancialDiffusionLLM:
+            st.error("Advanced model not available. Please check module dependencies.")
+            return
+            
         # Initialize model
         st.session_state.advanced_model = FinancialDiffusionLLM(
             vocab_size=vocab_size,
@@ -253,22 +470,13 @@ def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_len
         )
         
         # Get training data
-        if use_database and st.session_state.data_manager:
-            training_texts = st.session_state.data_manager.prepare_training_texts()
+        if use_database and st.session_state.training_data:
+            training_texts = st.session_state.training_data
+        elif st.session_state.data_manager:
+            training_texts = st.session_state.data_manager.prepare_sample_training_texts()
         else:
-            # Use sample data
-            training_texts = [
-                "The company reported strong quarterly earnings with revenue growth of 15% year-over-year and improved operating margins.",
-                "Market volatility increased following Federal Reserve policy announcements regarding interest rate adjustments and economic outlook.",
-                "Quarterly results exceeded analyst expectations with earnings per share of $2.45 compared to consensus estimates of $2.20.",
-                "The investment portfolio generated positive returns driven by strategic asset allocation and risk management practices.",
-                "Operating cash flow remained robust at $150 million supporting continued business expansion and shareholder returns.",
-                "Revenue diversification across multiple segments reduced dependency on cyclical market conditions and enhanced stability.",
-                "The company maintained strong balance sheet fundamentals with improved debt-to-equity ratios and liquidity positions.",
-                "Strategic acquisitions contributed to market share expansion and operational synergies exceeding initial projections.",
-                "Management guidance for the full fiscal year reflects confidence in sustainable growth trajectory and market positioning.",
-                "Risk assessment indicates stable credit quality with provisions adequate for current economic environment and portfolio composition."
-            ]
+            st.error("No training data available. Please collect data first.")
+            return
         
         if not training_texts:
             st.error("No training texts available. Please collect data first.")
@@ -611,6 +819,10 @@ def save_current_model():
 def load_saved_model(filename):
     """Load saved model"""
     try:
+        if not ADVANCED_MODULES_AVAILABLE or not FinancialDiffusionLLM:
+            st.error("Advanced model not available for loading")
+            return
+            
         model = FinancialDiffusionLLM()
         model.load_model(filename)
         st.session_state.advanced_model = model
