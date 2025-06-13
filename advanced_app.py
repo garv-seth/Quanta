@@ -1039,8 +1039,6 @@ def database_analytics_page():
                 st.write(f"**User:** {url.username}")
             except:
                 st.write("Connection details not available")
-    
-
 
 if __name__ == "__main__":
     main()
