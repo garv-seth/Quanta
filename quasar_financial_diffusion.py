@@ -657,20 +657,15 @@ class QuantumInspiredFinancialDiffusionModel(nn.Module):
         path_weights = self.path_weighting(combined_flat)  # [batch, num_paths]
         
         # Apply interference matrix for quantum superposition
-        # Get interference matrix as proper tensor
-        interference_matrix = self.interference_matrix
-        if hasattr(interference_matrix, 'data'):
-            interference_matrix = interference_matrix.data
-        interference_matrix = interference_matrix.to(device).float()
-        
-        # Matrix multiplication with proper shapes
-        interference = torch.matmul(path_weights.unsqueeze(1), interference_matrix).squeeze(1)
+        # Direct tensor access since it's registered as buffer
+        interference = torch.matmul(path_weights.unsqueeze(1), self.interference_matrix).squeeze(1)
         interference = F.softmax(interference, dim=-1)
         
         # Weighted combination of path outputs (path integral)
         final_output = torch.zeros_like(path_outputs[0])
         for i, path_output in enumerate(path_outputs):
-            weight = interference[:, i:i+1].unsqueeze(-1)
+            # Fix tensor indexing for proper weight application
+            weight = interference[:, i].unsqueeze(1).unsqueeze(2)  # [batch, 1, 1]
             final_output += weight * path_output
         
         # Final projection to vocabulary space
