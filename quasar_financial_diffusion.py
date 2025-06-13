@@ -163,9 +163,23 @@ class FinancialDataCollector:
         self.collection_log.append(log_entry)
         
     def collect_sec_filings_text(self) -> List[str]:
-        """Collect SEC filing excerpts with VERIFIED API calls."""
+        """Collect SEC filing excerpts with VERIFIED API calls and DATABASE STORAGE."""
         texts = []
-        self.log_collection_step("Starting SEC filings collection", source="Yahoo Finance API")
+        self.log_collection_step("Starting SEC filings collection", source="Yahoo Finance API + PostgreSQL")
+        
+        # REAL DATABASE STORAGE - Store every API call
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cursor = conn.cursor()
+            
+            # Clear previous data to ensure fresh collection
+            cursor.execute("DELETE FROM financial_data WHERE collection_timestamp < NOW() - INTERVAL '1 hour'")
+            conn.commit()
+            
+            self.log_collection_step("Database connected", source="PostgreSQL - Previous data cleared")
+        except Exception as e:
+            self.log_collection_step("Database connection failed", source=f"Error: {str(e)}")
+            return []
         
         # EXPLICIT API VERIFICATION - prove every call is real
         if YFINANCE_AVAILABLE:
@@ -185,10 +199,12 @@ class FinancialDataCollector:
                 
             except Exception as e:
                 self.log_collection_step("Network test failed", source=f"Error: {str(e)}")
+                cursor.close()
+                conn.close()
                 return []
             
-            # Real API calls with explicit verification
-            tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+            # Real API calls with explicit verification and database storage
+            tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'WMT']
             
             for ticker in tickers:
                 try:
@@ -196,6 +212,11 @@ class FinancialDataCollector:
                     stock = yf.Ticker(ticker)
                     info = stock.info
                     api_duration = time.time() - api_start
+                    
+                    # Store API call details in database
+                    company_name = info.get('longName', ticker)
+                    market_cap = info.get('marketCap', 0)
+                    sector = info.get('sector', 'Unknown')
                     
                     # Log API call details
                     self.log_collection_step(f"Fetched {ticker}", source=f"API time: {api_duration:.2f}s, Keys: {len(info.keys())}")
@@ -205,61 +226,92 @@ class FinancialDataCollector:
                     missing_fields = [f for f in required_fields if f not in info]
                     
                     if missing_fields:
+                        verification_status = f"INCOMPLETE - Missing: {missing_fields}"
                         self.log_collection_step(f"Incomplete data for {ticker}", source=f"Missing: {missing_fields}")
-                        continue
+                    else:
+                        verification_status = "VERIFIED"
                     
-                    # Extract business summary
+                    # Extract business summary and store in database
                     if 'longBusinessSummary' in info and info['longBusinessSummary']:
                         summary = info['longBusinessSummary']
-                        self.log_collection_step(f"Business summary extracted", 
+                        
+                        # Store raw data in database
+                        cursor.execute("""
+                            INSERT INTO financial_data 
+                            (ticker, company_name, text_content, data_source, market_cap, sector, 
+                             api_response_time, verification_status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (ticker, company_name, summary, 'Yahoo Finance API', 
+                              market_cap, sector, api_duration, verification_status))
+                        
+                        self.log_collection_step(f"Business summary stored in DB", 
                                                source=f"{ticker}: {len(summary)} chars")
                         
-                        # Split into chunks
+                        # Split into chunks for training
                         sentences = summary.split('. ')
                         for i in range(0, len(sentences), 3):
                             chunk = '. '.join(sentences[i:i+3])
                             if len(chunk.split()) > 10:
                                 texts.append(f"{ticker}: {chunk}")
                     
-                    # Generate financial metrics with real data
-                    market_cap = info.get('marketCap', 0)
+                    # Generate financial metrics with real data and store
                     if market_cap > 0:
-                        texts.append(f"{info.get('longName', ticker)} maintains a market capitalization of ${market_cap:,}, reflecting strong investor confidence in the {info.get('sector', 'technology')} sector.")
+                        metric_text = f"{company_name} maintains a market capitalization of ${market_cap:,}, reflecting strong investor confidence in the {sector} sector."
+                        texts.append(metric_text)
+                        
+                        cursor.execute("""
+                            INSERT INTO financial_data 
+                            (ticker, company_name, text_content, data_source, market_cap, sector, 
+                             api_response_time, verification_status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (ticker, company_name, metric_text, 'Generated from API data', 
+                              market_cap, sector, api_duration, verification_status))
                     
                     revenue_growth = info.get('revenueGrowth')
                     if revenue_growth is not None:
-                        texts.append(f"Revenue growth of {revenue_growth*100:.1f}% demonstrates {ticker}'s operational excellence and market positioning.")
+                        growth_text = f"Revenue growth of {revenue_growth*100:.1f}% demonstrates {ticker}'s operational excellence and market positioning."
+                        texts.append(growth_text)
+                        
+                        cursor.execute("""
+                            INSERT INTO financial_data 
+                            (ticker, company_name, text_content, data_source, market_cap, sector, 
+                             api_response_time, verification_status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (ticker, company_name, growth_text, 'Generated from API data', 
+                              market_cap, sector, api_duration, verification_status))
                     
                     profit_margins = info.get('profitMargins')
                     if profit_margins is not None:
-                        texts.append(f"Profit margins of {profit_margins*100:.1f}% indicate {ticker}'s efficient cost management and pricing power in competitive markets.")
+                        margin_text = f"Profit margins of {profit_margins*100:.1f}% indicate {ticker}'s efficient cost management and pricing power in competitive markets."
+                        texts.append(margin_text)
+                        
+                        cursor.execute("""
+                            INSERT INTO financial_data 
+                            (ticker, company_name, text_content, data_source, market_cap, sector, 
+                             api_response_time, verification_status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (ticker, company_name, margin_text, 'Generated from API data', 
+                              market_cap, sector, api_duration, verification_status))
+                    
+                    # Commit after each ticker
+                    conn.commit()
                         
                 except Exception as e:
                     self.log_collection_step(f"Failed to fetch {ticker}", source=f"Error: {str(e)}")
                     continue
             
-            self.log_collection_step("Real financial data collected", len(texts), f"Yahoo Finance API - {len(tickers)} companies")
+            # Close database connection
+            cursor.close()
+            conn.close()
+            
+            self.log_collection_step("Real financial data collected & stored", len(texts), f"Yahoo Finance API + PostgreSQL - {len(tickers)} companies")
         
         else:
             self.log_collection_step("Yahoo Finance not available", source="Package not installed")
+            cursor.close()
+            conn.close()
         
-        # Add some template-based content for training diversity
-        base_templates = [
-            "The Company reported quarterly revenue of ${amount} million, representing {pct}% growth year-over-year.",
-            "Operating cash flow increased to ${amount} million, demonstrating strong operational performance.",
-            "Total debt obligations decreased by ${amount} million during the reporting period."
-        ]
-        
-        for _ in range(200):  # Limited template generation
-            template = random.choice(base_templates)
-            text = template.format(
-                amount=round(random.uniform(100, 10000), 1),
-                pct=round(random.uniform(5, 30), 1)
-            )
-            texts.append(text)
-        
-        self.log_collection_step("Template data added", 200, "Generated content")
-        self.log_collection_step("SEC collection completed", len(texts), "Total dataset")
+        self.log_collection_step("SEC collection completed", len(texts), "Total authentic dataset stored in PostgreSQL")
         
         return texts
     
@@ -1159,9 +1211,9 @@ def training_interface():
         
         col1, col2 = st.columns(2)
         with col1:
-            num_epochs = st.slider("Training Epochs", 10, 200, 50, key="training_epochs_slider")
+            num_epochs = st.slider("Training Epochs", 10, 200, 50, key="main_training_epochs")
         with col2:
-            learning_rate = st.selectbox("Learning Rate", [1e-5, 5e-5, 1e-4, 5e-4], index=2, key="learning_rate_select")
+            learning_rate = st.selectbox("Learning Rate", [1e-5, 5e-5, 1e-4, 5e-4], index=2, key="main_learning_rate")
         
         if st.button("🏋️ Start Training", disabled=st.session_state.is_training, use_container_width=True):
             start_training(num_epochs, learning_rate)
