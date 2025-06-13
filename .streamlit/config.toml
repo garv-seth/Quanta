@@ -2,9 +2,25 @@
 headless = true
 address = "0.0.0.0"
 port = 5000
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+
+[global]
+developmentMode = false
+
+[runner]
+magicEnabled = false
+installDependenciesOnRun = false
+
+[logger]
+level = "error"
+messageFormat = "%(asctime)s %(message)s"
+
+[client]
+caching = false
+displayEnabled = false
 
 [theme]
-primaryColor = "#1f77b4"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
+base = "dark"
