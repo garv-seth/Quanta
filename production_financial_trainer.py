@@ -25,7 +25,6 @@ import gc
 # Import core models and utilities
 from models.diffusion_model import DiffusionModel
 from data.sample_texts import get_sample_financial_texts, get_sample_text_pairs
-from utils.training import ModelTrainer
 
 # Try importing optional dependencies
 try:
@@ -261,25 +260,29 @@ class RTX4060OptimizedTrainer:
         if PSUTIL_AVAILABLE:
             try:
                 mem = psutil.virtual_memory()
-                stats.update({
-                    'ram_percent': mem.percent,
-                    'ram_available_gb': mem.available / (1024**3),
-                    'cpu_percent': psutil.cpu_percent()
-                })
+                stats['ram_percent'] = mem.percent
+                stats['ram_available_gb'] = mem.available / (1024**3)
+                stats['cpu_percent'] = psutil.cpu_percent()
             except:
-                stats.update({'ram_percent': 50.0, 'cpu_percent': 25.0})
+                stats['ram_percent'] = 50.0
+                stats['cpu_percent'] = 25.0
         else:
-            stats.update({'ram_percent': 50.0, 'cpu_percent': 25.0})
+            stats['ram_percent'] = 50.0
+            stats['cpu_percent'] = 25.0
         
         if torch.cuda.is_available():
             try:
-                stats.update({
-                    'vram_allocated_gb': torch.cuda.memory_allocated() / (1024**3),
-                    'vram_total_gb': torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                })
+                stats['vram_allocated_gb'] = torch.cuda.memory_allocated() / (1024**3)
+                stats['vram_total_gb'] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 stats['vram_percent'] = (stats['vram_allocated_gb'] / stats['vram_total_gb']) * 100
             except:
-                stats.update({'vram_allocated_gb': 0, 'vram_total_gb': 8, 'vram_percent': 0})
+                stats['vram_allocated_gb'] = 0.0
+                stats['vram_total_gb'] = 8.0
+                stats['vram_percent'] = 0.0
+        else:
+            stats['vram_allocated_gb'] = 0.0
+            stats['vram_total_gb'] = 0.0
+            stats['vram_percent'] = 0.0
         
         return stats
 
