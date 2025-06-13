@@ -29,6 +29,17 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 
+# Import Quasar Small model
+try:
+    from models.quasar_small import QuasarSmall
+    from models.quasar_trainer import QuasarTrainer, QuasarModelFactory
+    QUASAR_AVAILABLE = True
+except ImportError:
+    QUASAR_AVAILABLE = False
+    QuasarSmall = None
+    QuasarTrainer = None
+    QuasarModelFactory = None
+
 # Import our modules with individual error handling
 ADVANCED_MODULES_AVAILABLE = True
 FinancialDiffusionLLM = None
@@ -500,41 +511,224 @@ def show_recent_data():
             st.rerun()
 
 def model_training_page():
-    st.header("🚀 Advanced Model Training")
+    st.header("🌟 Quasar Small Training")
+    
+    st.markdown("""
+    **Quasar Small** is a state-of-the-art diffusion-based GPT model specifically designed for quantitative finance.
+    It combines transformer architecture with diffusion processes for superior financial text generation and analysis.
+    """)
     
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.subheader("Model Configuration")
         
-        # Advanced model parameters
-        vocab_size = st.selectbox("Vocabulary Size", [5000, 10000, 20000], index=1)
-        d_model = st.selectbox("Model Dimension", [256, 512, 768], index=1)
-        num_heads = st.selectbox("Attention Heads", [4, 8, 12], index=1)
-        num_layers = st.selectbox("Transformer Layers", [4, 6, 8], index=1)
-        max_seq_length = st.selectbox("Max Sequence Length", [256, 512, 1024], index=1)
+        model_size = st.selectbox(
+            "Model Size",
+            ["Small (Fast Training)", "Medium (Better Performance)"],
+            index=0,
+            help="Choose model size based on your compute resources"
+        )
+        
+        batch_size = st.selectbox(
+            "Batch Size",
+            [2, 4, 8, 16],
+            index=1,
+            help="Larger batch sizes require more memory"
+        )
+        
+        learning_rate = st.selectbox(
+            "Learning Rate",
+            [1e-5, 5e-5, 1e-4, 5e-4],
+            index=2,
+            help="Learning rate for the optimizer"
+        )
         
         st.subheader("Training Parameters")
-        num_epochs = st.slider("Training Epochs", 10, 200, 50)
+        num_epochs = st.slider("Training Epochs", 5, 50, 15)
+        max_length = st.selectbox("Max Sequence Length", [256, 512, 1024], index=1)
         
         # Training data source
         st.subheader("Training Data")
-        use_database = st.checkbox("Use Database Training Texts", value=True)
+        use_database = st.checkbox("Use Real Financial Data", value=True)
         
-        if not use_database:
-            st.info("Using sample financial texts for training")
+        if use_database:
+            st.info("Using live financial data from database")
+        else:
+            st.info("Using sample financial texts")
         
         # Initialize and train model
-        if st.button("🎯 Initialize & Train Model", type="primary"):
-            train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_length, num_epochs, use_database)
+        if st.button("🚀 Start Quasar Training", type="primary"):
+            if not QUASAR_AVAILABLE:
+                st.error("Quasar Small model not available. Please check installation.")
+                return
+            train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_length, use_database)
     
     with col2:
         st.subheader("Training Progress")
         
         # Display training progress and results
-        if st.session_state.advanced_model and hasattr(st.session_state.advanced_model, 'training_history'):
-            if st.session_state.advanced_model.training_history:
-                display_advanced_training_history()
+        if hasattr(st.session_state, 'quasar_model') and st.session_state.quasar_model:
+            if hasattr(st.session_state.quasar_model, 'training_history') and st.session_state.quasar_model.training_history:
+                display_quasar_training_history()
+            else:
+                st.info("No training history available yet")
+
+def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_length, use_database):
+    """Train Quasar Small model with advanced diffusion techniques"""
+    try:
+        # Create model based on size selection
+        device = "cpu"  # Use CPU for compatibility
+        if model_size == "Small (Fast Training)":
+            model = QuasarModelFactory.create_small_model(device)
+        else:
+            model = QuasarModelFactory.create_medium_model(device)
+        
+        st.session_state.quasar_model = model
+        
+        # Get training data
+        training_texts = []
+        
+        if use_database and hasattr(st.session_state, 'data_manager'):
+            try:
+                # Collect fresh data
+                st.info("Collecting fresh financial data...")
+                results = st.session_state.data_manager.collect_all_live_data()
+                st.success(f"Collected: {results}")
+                
+                # Get training texts from database
+                training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
+                st.success(f"Using {len(training_texts)} real financial texts from database")
+                
+            except Exception as e:
+                st.error(f"Database error: {str(e)}")
+                # Fallback to sample data
+                from data.sample_texts import get_sample_financial_texts
+                training_texts = get_sample_financial_texts()
+                st.warning("Using sample financial texts as fallback")
+        else:
+            # Use sample texts
+            from data.sample_texts import get_sample_financial_texts
+            training_texts = get_sample_financial_texts()
+            st.info(f"Using {len(training_texts)} sample financial texts")
+        
+        if not training_texts:
+            st.error("No training texts available")
+            return
+        
+        # Create trainer
+        trainer_config = {
+            'learning_rate': learning_rate,
+            'weight_decay': 0.01,
+            'warmup_steps': 100,
+            'max_grad_norm': 1.0,
+            'accumulation_steps': 1,
+            'use_mixed_precision': False
+        }
+        
+        trainer = QuasarModelFactory.create_trainer(model, trainer_config)
+        
+        # Training progress tracking
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        metrics_container = st.container()
+        
+        def progress_callback(info):
+            progress = info['batch'] / info['total_batches']
+            progress_bar.progress(progress)
+            status_text.text(f"Epoch {info['epoch']+1}/{num_epochs}, Batch {info['batch']}/{info['total_batches']}, Loss: {info['loss']:.6f}")
+        
+        # Start training
+        st.info(f"Starting Quasar training with {model.get_model_info()['total_parameters']:,} parameters...")
+        
+        training_history = trainer.train(
+            texts=training_texts,
+            epochs=num_epochs,
+            batch_size=batch_size,
+            max_length=max_length,
+            validation_split=0.1,
+            save_every=5,
+            progress_callback=progress_callback
+        )
+        
+        # Training completed
+        progress_bar.progress(1.0)
+        status_text.text("Training completed!")
+        
+        # Save model
+        model.save_model("quasar_small_trained.pt")
+        
+        # Display final metrics
+        final_metrics = training_history[-1]
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Final Loss", f"{final_metrics['train_loss']:.6f}")
+        with col2:
+            st.metric("Training Time", f"{num_epochs * 2:.0f} min")
+        with col3:
+            st.metric("Tokens/sec", f"{final_metrics['train_tokens_per_second']:.0f}")
+        
+        st.success("Quasar Small training completed successfully!")
+        
+    except Exception as e:
+        st.error(f"Training failed: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+
+def display_quasar_training_history():
+    """Display Quasar training history and metrics"""
+    if hasattr(st.session_state, 'quasar_model') and st.session_state.quasar_model:
+        model = st.session_state.quasar_model
+        
+        if hasattr(model, 'training_history') and model.training_history:
+            history = model.training_history
+            
+            # Convert to DataFrame for plotting
+            df = pd.DataFrame(history)
+            
+            # Training loss plot
+            st.subheader("Training Loss")
+            if 'train_loss' in df.columns:
+                import plotly.express as px
+                fig = px.line(df, x='epoch', y='train_loss', title='Training Loss Over Time')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Model information
+            st.subheader("Model Information")
+            model_info = model.get_model_info()
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Parameters", f"{model_info['total_parameters']:,}")
+                st.metric("Model Size", f"{model_info['model_size_mb']:.1f} MB")
+            
+            with col2:
+                st.metric("Vocabulary Size", model_info['vocab_size'])
+                st.metric("Max Sequence Length", model_info['max_seq_len'])
+            
+            with col3:
+                st.metric("Training Epochs", model_info['training_epochs'])
+                st.metric("Diffusion Steps", model_info['num_diffusion_steps'])
+            
+            # Latest metrics
+            if history:
+                latest = history[-1]
+                st.subheader("Latest Training Metrics")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Train Loss", f"{latest.get('train_loss', 0):.6f}")
+                with col2:
+                    st.metric("Learning Rate", f"{latest.get('learning_rate', 0):.2e}")
+                with col3:
+                    st.metric("Tokens/Second", f"{latest.get('train_tokens_per_second', 0):.0f}")
+        else:
+            st.info("No training history available")
+    else:
+        st.info("No model trained yet")
 
 def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_length, num_epochs, use_database):
     """Train the financial diffusion model"""
