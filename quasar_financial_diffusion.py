@@ -11,6 +11,12 @@ import sys
 # Fix PyTorch compatibility issues with Streamlit
 os.environ['TORCH_SHOW_CPP_STACKTRACES'] = '0'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
+os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
+os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
+
+# Import torch after setting environment variables
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 
 import torch
 import torch.nn as nn
@@ -513,15 +519,23 @@ class FinancialDiffusionModel(nn.Module):
         # Convert discrete tokens to continuous for noise addition
         x_start_float = x_start.float()
         
-        # Access registered buffers properly
-        alphas_cumprod = self.alphas_cumprod
+        # Access registered buffers with proper tensor handling
+        device = x_start.device
+        t = t.to(device)
         
-        sqrt_alphas_cumprod_t = torch.gather(
-            torch.sqrt(alphas_cumprod), 0, t
+        # Ensure we're working with proper tensors
+        alphas_cumprod = self.alphas_cumprod
+        if not isinstance(alphas_cumprod, torch.Tensor):
+            alphas_cumprod = torch.tensor(alphas_cumprod, device=device)
+        else:
+            alphas_cumprod = alphas_cumprod.to(device)
+        
+        sqrt_alphas_cumprod_t = torch.index_select(
+            torch.sqrt(alphas_cumprod), 0, t.long()
         ).view(-1, 1)
         
-        sqrt_one_minus_alphas_cumprod_t = torch.gather(
-            torch.sqrt(1.0 - alphas_cumprod), 0, t
+        sqrt_one_minus_alphas_cumprod_t = torch.index_select(
+            torch.sqrt(1.0 - alphas_cumprod), 0, t.long()
         ).view(-1, 1)
         
         return sqrt_alphas_cumprod_t * x_start_float + sqrt_one_minus_alphas_cumprod_t * noise
@@ -604,6 +618,9 @@ class QuasarTrainer:
     
     def setup_optimizer(self, learning_rate: float = 1e-4):
         """Setup optimizer and scheduler."""
+        if self.model is None:
+            raise ValueError("Model must be created before setting up optimizer")
+            
         self.optimizer = AdamW(
             self.model.parameters(),
             lr=learning_rate,

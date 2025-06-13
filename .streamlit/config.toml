@@ -2,7 +2,7 @@
 headless = true
 address = "0.0.0.0"
 port = 5000
-enableWebsocketCompression = false
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
@@ -10,17 +10,5 @@ gatherUsageStats = false
 [global]
 developmentMode = false
 
-[runner]
-magicEnabled = false
-installDependenciesOnRun = false
-
 [logger]
 level = "error"
-messageFormat = "%(asctime)s %(message)s"
-
-[client]
-caching = false
-displayEnabled = false
-
-[theme]
-base = "dark"
