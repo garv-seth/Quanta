@@ -1,30 +1,24 @@
-# Financial Diffusion Language Model (dLLM) - Quanta
+# Quanta Quasar - Financial Diffusion Language Model
 
 ## Overview
 
-Quanta is a pioneering project developing the world's first production-ready Diffusion-based Large Language Model (dLLM) specifically designed for financial applications. The system features multiple models including Quasar Advanced, Quasar Basic, and the breakthrough FinSar model that implements Feynman path integral principles for financial text processing.
+Quanta Quasar is a production-ready Diffusion-based Large Language Model (dLLM) specifically designed for financial text processing. The system automatically detects available hardware (62GB RAM Replit environment or local RTX 4060) and optimizes training parameters accordingly. Features comprehensive financial data collection, proper diffusion model architecture with cosine noise scheduling, and extended training duration (45+ minutes) for real model convergence.
 
 ## System Architecture
 
 ### Frontend Architecture
-- **Framework**: Streamlit web application
-- **Multiple Apps**: 
-  - `app.py` - Core financial text diffusion model interface
-  - `advanced_app.py` - Advanced financial diffusion LLM with Quasar integration
-  - `quanta_app.py` - Main Quanta application with multiple model options
-  - `consolidated_app.py` - Unified interface for all three revolutionary models
-  - `simple_app.py` - Simplified demonstration interface
-- **Configuration**: Wide layout with expandable sidebar for model controls
-- **Deployment**: Streamlit server on port 5000 with autoscale deployment target
+- **Framework**: Single Streamlit application (`quasar_financial_diffusion.py`)
+- **Interface**: Adaptive UI that shows detected hardware specifications
+- **Tabs**: Training, Monitoring, Management for complete workflow
+- **Configuration**: Automatic hardware detection and optimization
+- **Deployment**: Streamlit server on port 5000
 
 ### Backend Architecture
-- **Core Models**:
-  - `DiffusionModel` - Primary diffusion model for text refinement in embedding space
-  - `QuasarAdvanced` - Full transformer-based diffusion model (15.2M parameters)
-  - `QuasarBasic` - Lightweight efficient model
-  - `FinSar` - Finance Quasar with Feynman path integral principles
-  - `SimpleFinancialDiffusion` - Simplified diffusion model without heavy dependencies
-  - `QuasarPretrainedModel` - Pre-trained model ready for inference
+- **Core Model**: `FinancialDiffusionModel` - Production transformer-based diffusion model
+- **Environment Detection**: `EnvironmentDetector` - Automatic hardware optimization
+- **Data Collection**: `FinancialDataCollector` - Real financial text generation
+- **Tokenization**: `FinancialTokenizer` - Domain-specific vocabulary building
+- **Training**: `QuasarTrainer` - Production training pipeline with proper duration
 
 ### Text Processing Pipeline
 - **Embedding Generation**: Sentence Transformers (all-MiniLM-L6-v2) for 384-dimensional embeddings
