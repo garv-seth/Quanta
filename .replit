@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Quanta App"
+runButton = "Quanta Fixed App"
 
 [[workflows.workflow]]
 name = "Project"
@@ -40,6 +40,15 @@ args = "streamlit run quanta_app.py --server.port 5000"
 
 [[workflows.workflow]]
 name = "Quanta App"
+author = 33980514
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run quanta_app.py --server.port 5000"
+
+[[workflows.workflow]]
+name = "Quanta Fixed App"
 author = 33980514
 mode = "sequential"
 
