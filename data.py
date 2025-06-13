@@ -1,30 +1,68 @@
 """
-Sample financial texts for training the Quasar diffusion model.
-This module provides realistic financial text data for demonstration.
+Module for loading and preparing text datasets for the Quasar d-SLM.
+This module uses the Hugging Face `datasets` library to handle data loading.
 """
 
-def get_sample_financial_texts():
-    """Get sample financial texts for training."""
-    return [
-        "The Company reported quarterly revenue of $2.3 billion, representing a 12% increase year-over-year.",
-        "Operating expenses for the quarter totaled $450 million, compared to $420 million in the prior year period.",
-        "Gross margin improved to 42.5% from 38.2% in the previous quarter due to operational efficiency gains.",
-        "Cash and cash equivalents totaled $1.2 billion as of December 31, providing adequate liquidity.",
-        "The effective tax rate for the period was 21.5%, compared to 23.1% in the prior year.",
-        "Free cash flow generation of $180 million demonstrates strong operational performance.",
-        "The Company's debt-to-equity ratio improved to 0.35 from 0.42 in the previous quarter.",
-        "Return on invested capital increased to 14.2% from 12.8% year-over-year.",
-    ]
+from datasets import load_dataset, Dataset, DatasetDict
+import logging
 
-def get_sample_text_pairs():
-    """Get sample pairs of draft and refined financial texts."""
-    return [
-        {
-            "draft": "Sales went up this quarter by quite a bit compared to last year.",
-            "refined": "Revenue increased 15.3% year-over-year to $2.1 billion in the current quarter."
-        },
-        {
-            "draft": "Our costs were higher than expected but still manageable.",
-            "refined": "Operating expenses of $340 million exceeded guidance by 8% but remained within acceptable parameters."
-        },
-    ]
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def load_text_dataset(dataset_name: str = "roneneldan/TinyStories", split: str = "train", streaming: bool = True):
+    """
+    Loads a text dataset from the Hugging Face Hub.
+
+    Args:
+        dataset_name (str): The name of the dataset on the Hugging Face Hub.
+        split (str): The dataset split to load (e.g., 'train', 'validation').
+        streaming (bool): Whether to stream the dataset to avoid downloading it all at once.
+
+    Returns:
+        A Hugging Face `Dataset` object.
+    """
+    try:
+        logging.info(f"Attempting to load dataset: {dataset_name} (split: {split}, streaming: {streaming})")
+        dataset = load_dataset(dataset_name, split=split, streaming=streaming)
+        logging.info("Successfully loaded dataset.")
+        # If streaming, we can't easily check the first element without starting the stream.
+        # For non-streaming, you could inspect with: logging.info(f"First example: {next(iter(dataset))}")
+        return dataset
+    except Exception as e:
+        logging.error(f"Failed to load dataset '{dataset_name}': {e}")
+        logging.info("Returning a small dummy dataset as a fallback.")
+        return _create_dummy_dataset()
+
+def _create_dummy_dataset() -> DatasetDict:
+    """Creates a small, dummy dataset for debugging and testing."""
+    dummy_data = {
+        "train": Dataset.from_dict({
+            "text": [
+                "Once upon a time, in a land of code, a small model learned to write stories.",
+                "It read many books and practiced every day.",
+                "Its goal was to create something new and wonderful.",
+            ]
+        }),
+        "validation": Dataset.from_dict({
+            "text": [
+                "This is a validation sentence.",
+                "This is another one.",
+            ]
+        })
+    }
+    return DatasetDict(dummy_data)
+
+if __name__ == '__main__':
+    # Example of how to use the loader
+    print("Loading the default TinyStories dataset (streaming):")
+    streamed_dataset = load_text_dataset()
+    # Since it's streamed, we can't get the length, but we can iterate.
+    for i, example in enumerate(streamed_dataset):
+        if i >= 3:
+            break
+        print(f"Example {i+1}: {example['text'][:80]}...")
+
+    print("\nLoading a non-streamed dummy dataset for testing:")
+    dummy_dataset_dict = _create_dummy_dataset()
+    train_dataset = dummy_dataset_dict['train']
+    print(f"Dummy dataset has {len(train_dataset)} examples.")
+    print(f"First example: {train_dataset[0]['text']}")
