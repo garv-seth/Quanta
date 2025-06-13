@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Project"
+runButton = "Quanta App"
 
 [[workflows.workflow]]
 name = "Project"
@@ -28,6 +28,24 @@ author = "agent"
 task = "shell.exec"
 args = "streamlit run advanced_app.py --server.port 5000"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Quanta App"
+author = 33980514
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run quanta_app.py --server.port 5000"
+
+[[workflows.workflow]]
+name = "Quanta App"
+author = 33980514
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run quanta_app.py --server.port 5000"
 
 [[ports]]
 localPort = 5000
