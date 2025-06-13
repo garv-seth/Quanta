@@ -286,7 +286,7 @@ def main():
             st.warning("⚠️ Model Not Trained")
         
         # Database status
-        if st.session_state.data_manager and st.session_state.data_manager.db_connected:
+        if st.session_state.data_manager and hasattr(st.session_state.data_manager, 'db_connected') and st.session_state.data_manager.db_connected:
             st.success("✅ Database Connected")
         else:
             st.warning("⚠️ Using Sample Data")
@@ -559,14 +559,34 @@ def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_len
             st.error("No diffusion model available for training")
             return
         
-        # Get training data
-        if use_database and st.session_state.training_data:
-            training_texts = st.session_state.training_data
-        elif st.session_state.data_manager:
-            training_texts = st.session_state.data_manager.prepare_sample_training_texts()
-        else:
-            st.error("No training data available. Please collect data first.")
-            return
+        # Get real financial training data from PostgreSQL database
+        training_texts = []
+        
+        if use_database and st.session_state.database_connected:
+            try:
+                # First, ensure we have fresh data
+                if hasattr(st.session_state.data_manager, 'collect_all_live_data'):
+                    st.info("Collecting fresh Yahoo Finance data...")
+                    results = st.session_state.data_manager.collect_all_live_data()
+                    st.success(f"Collected: {results}")
+                
+                # Get training texts from real financial data
+                if hasattr(st.session_state.data_manager, 'prepare_training_texts_from_db'):
+                    training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
+                    st.success(f"Using {len(training_texts)} real financial texts from database")
+                    
+            except Exception as e:
+                st.error(f"Database error: {str(e)}")
+                return
+        
+        # Only use fallback if no database connection
+        if not training_texts:
+            if st.session_state.training_data:
+                training_texts = st.session_state.training_data
+                st.warning("Using previously collected data")
+            else:
+                st.error("No real financial data available. Please initialize database connection.")
+                return
         
         if not training_texts:
             st.error("No training texts available. Please collect data first.")
@@ -593,28 +613,30 @@ def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_len
         st.session_state.advanced_model.is_trained = True
         st.session_state.model_trained = True
         
-        # Save model checkpoint
-        model_path = f"financial_diffusion_llm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        st.session_state.advanced_model.save_model(model_path)
+        # Save model checkpoint to database
+        checkpoint_name = f"financial_diffusion_llm_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Save to database
-        if st.session_state.data_manager:
+        # Save to database if available
+        if st.session_state.database_connected and hasattr(st.session_state.data_manager, 'save_model_checkpoint'):
             try:
-                model_info = st.session_state.advanced_model.get_model_info()
-                st.session_state.data_manager.save_model_checkpoint(
+                model_info = st.session_state.advanced_model.get_model_info() if hasattr(st.session_state.advanced_model, 'get_model_info') else {"type": "SimpleFinancialDiffusion"}
+                checkpoint_id = st.session_state.data_manager.save_model_checkpoint(
                     model_name="FinancialDiffusionLLM",
                     model_config=model_info,
-                    training_params={"epochs": num_epochs, "texts": len(training_texts)},
-                    performance_metrics={"final_loss": losses[-1] if losses else 0.0},
+                    training_params={"epochs": num_epochs, "texts": len(training_texts), "use_database": use_database},
+                    performance_metrics={"final_loss": losses[-1] if losses else 0.0, "training_texts_count": len(training_texts)},
                     epoch=num_epochs,
                     loss=losses[-1] if losses else 0.0,
-                    checkpoint_path=model_path,
+                    checkpoint_path=f"database_checkpoint_{checkpoint_id}",
                     is_best=True
                 )
+                st.success(f"Training completed! Model saved to PostgreSQL database (ID: {checkpoint_id})")
             except Exception as e:
-                st.warning(f"Model saved locally but database checkpoint failed: {str(e)}")
-        
-        st.success(f"Training completed! Model saved as {model_path}")
+                st.warning(f"Training completed but database save failed: {str(e)}")
+                st.success("Training completed successfully!")
+        else:
+            st.success("Training completed successfully!")
+            st.info("Model checkpoints will be saved to database when connection is available")
         
     except Exception as e:
         st.error(f"Training failed: {str(e)}")

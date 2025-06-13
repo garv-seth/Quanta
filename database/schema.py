@@ -10,6 +10,14 @@ from datetime import datetime
 
 Base = declarative_base()
 
+# Database connection
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 class FinancialCompany(Base):
     __tablename__ = 'financial_companies'
     

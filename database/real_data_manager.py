@@ -27,11 +27,24 @@ class RealFinancialDataManager:
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not set")
         
-        self.engine = create_engine(self.database_url)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        
-        # Ensure tables exist
-        Base.metadata.create_all(bind=self.engine)
+        try:
+            self.engine = create_engine(self.database_url)
+            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            
+            # Test connection and ensure tables exist
+            Base.metadata.create_all(bind=self.engine)
+            
+            # Test connection
+            from sqlalchemy import text
+            session = self.SessionLocal()
+            session.execute(text("SELECT 1"))
+            session.close()
+            
+            self.db_connected = True
+        except Exception as e:
+            print(f"Database connection failed: {e}")
+            self.db_connected = False
+            raise
     
     def get_session(self):
         """Get database session"""
