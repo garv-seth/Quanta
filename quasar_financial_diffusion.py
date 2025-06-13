@@ -520,43 +520,62 @@ class FinancialTokenizer:
         return ' '.join(words)
 
 
-class FinancialDiffusionModel(nn.Module):
-    """Full diffusion model for financial text processing."""
+class QuantumInspiredFinancialDiffusionModel(nn.Module):
+    """
+    Quantum-inspired diffusion model implementing Feynman path integral principles.
+    Explores multiple denoising paths simultaneously and combines them probabilistically.
+    """
     
     def __init__(self, vocab_size, d_model=512, nhead=8, num_layers=6, 
-                 max_seq_len=512, num_diffusion_steps=1000):
+                 max_seq_len=512, num_diffusion_steps=1000, num_paths=8):
         super().__init__()
         
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
         self.num_diffusion_steps = num_diffusion_steps
+        self.num_paths = num_paths  # Multiple path exploration
         
-        # Embedding layers
-        self.token_embedding = nn.Embedding(vocab_size, d_model)
+        # Path-specific embedding layers (Feynman path exploration)
+        self.path_embeddings = nn.ModuleList([
+            nn.Embedding(vocab_size, d_model) for _ in range(num_paths)
+        ])
         self.position_embedding = nn.Embedding(max_seq_len, d_model)
+        
+        # Quantum-inspired time encoding with phase modulation
         self.time_embedding = nn.Sequential(
-            nn.Linear(1, d_model),
+            nn.Linear(1, d_model // 2),
             nn.ReLU(),
-            nn.Linear(d_model, d_model)
+            nn.Linear(d_model // 2, d_model)
         )
         
-        # Transformer encoder
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=d_model * 4,
-            dropout=0.1,
-            batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # Path-specific transformers (parallel path processing)
+        self.path_transformers = nn.ModuleList()
+        for _ in range(num_paths):
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=d_model * 4,
+                dropout=0.1,
+                batch_first=True
+            )
+            transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            self.path_transformers.append(transformer)
         
-        # Output projection
+        # Path weighting network (quantum amplitude calculation)
+        self.path_weighting = nn.Sequential(
+            nn.Linear(d_model * num_paths, d_model * 2),
+            nn.ReLU(),
+            nn.Linear(d_model * 2, num_paths),
+            nn.Softmax(dim=-1)
+        )
+        
+        # Final projection and interference pattern combination
         self.output_projection = nn.Linear(d_model, vocab_size)
         self.dropout = nn.Dropout(0.1)
         
-        # Noise schedule (cosine schedule for better performance)
-        betas = self._cosine_beta_schedule()
+        # Enhanced noise schedule with quantum-inspired oscillations
+        betas = self._quantum_inspired_beta_schedule()
         alphas = 1.0 - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
         
@@ -564,95 +583,148 @@ class FinancialDiffusionModel(nn.Module):
         self.register_buffer('alphas', alphas)
         self.register_buffer('alphas_cumprod', alphas_cumprod)
         
-    def _cosine_beta_schedule(self, s=0.008):
-        """Cosine noise schedule for stable training."""
+        # Path interference matrix for quantum superposition
+        self.register_buffer('interference_matrix', 
+                           torch.randn(num_paths, num_paths) / math.sqrt(num_paths))
+        
+    def _quantum_inspired_beta_schedule(self, s=0.008):
+        """Quantum-inspired noise schedule with interference patterns."""
         steps = self.num_diffusion_steps
         x = torch.linspace(0, steps, steps + 1)
+        
+        # Base cosine schedule
         alphas_cumprod = torch.cos(((x / steps) + s) / (1 + s) * math.pi * 0.5) ** 2
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+        
+        # Add quantum oscillations for path exploration
+        quantum_phase = torch.sin(2 * math.pi * x / steps * self.num_paths) * 0.1
+        alphas_cumprod = alphas_cumprod * (1 + quantum_phase * 0.05)
+        
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
         return torch.clip(betas, 0, 0.999)
     
     def forward(self, x, t):
-        """Forward pass through the model."""
+        """Quantum path integral forward pass."""
         batch_size, seq_len = x.shape
         device = x.device
         
-        # Token embeddings
-        token_emb = self.token_embedding(x)
+        # Time embedding with quantum phase
+        time_emb = self.time_embedding(t.float().unsqueeze(-1) / self.num_diffusion_steps)
         
-        # Position embeddings
+        # Position encoding
         positions = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, -1)
         pos_emb = self.position_embedding(positions)
         
-        # Time embeddings
-        t_normalized = t.float().unsqueeze(-1) / self.num_diffusion_steps
-        time_emb = self.time_embedding(t_normalized).unsqueeze(1)
+        # Explore multiple denoising paths simultaneously (Feynman path integral)
+        path_outputs = []
+        path_features = []
         
-        # Combine embeddings
-        embeddings = token_emb + pos_emb + time_emb
-        embeddings = self.dropout(embeddings)
+        for path_idx in range(self.num_paths):
+            # Path-specific token embedding
+            token_emb = self.path_embeddings[path_idx](x)
+            
+            # Combine embeddings with path-specific phase
+            path_phase = 2 * math.pi * path_idx / self.num_paths
+            phase_modulation = torch.cos(torch.tensor(path_phase, device=device))
+            
+            combined_emb = token_emb + pos_emb + time_emb * phase_modulation
+            combined_emb = self.dropout(combined_emb)
+            
+            # Path-specific transformer processing
+            path_output = self.path_transformers[path_idx](combined_emb)
+            path_outputs.append(path_output)
+            
+            # Extract path features for interference calculation
+            path_features.append(path_output.mean(dim=1))  # Global path representation
         
-        # Transformer processing
-        output = self.transformer(embeddings)
+        # Store path outputs for diversity loss calculation
+        self._last_path_outputs = path_outputs
         
-        # Output projection
-        logits = self.output_projection(output)
+        # Quantum interference - combine path features
+        combined_features = torch.stack(path_features, dim=-1)  # [batch, d_model, num_paths]
+        combined_flat = combined_features.view(batch_size, -1)
+        
+        # Calculate path weights (quantum amplitudes)
+        path_weights = self.path_weighting(combined_flat)  # [batch, num_paths]
+        
+        # Apply interference matrix for quantum superposition
+        interference_matrix = self.interference_matrix.to(device)
+        interference = torch.matmul(path_weights.unsqueeze(1), interference_matrix).squeeze(1)
+        interference = F.softmax(interference, dim=-1)
+        
+        # Weighted combination of path outputs (path integral)
+        final_output = torch.zeros_like(path_outputs[0])
+        for i, path_output in enumerate(path_outputs):
+            weight = interference[:, i:i+1].unsqueeze(-1)
+            final_output += weight * path_output
+        
+        # Final projection to vocabulary space
+        logits = self.output_projection(final_output)
         
         return logits
     
     def add_noise(self, x_start, t, noise=None):
-        """Add noise to clean data according to diffusion schedule."""
+        """Add noise according to diffusion schedule."""
         if noise is None:
-            noise = torch.randn_like(x_start, dtype=torch.float)
+            noise = torch.randn_like(x_start.float())
         
-        # Convert discrete tokens to continuous for noise addition
-        x_start_float = x_start.float()
+        sqrt_alphas_cumprod_t = self.alphas_cumprod[t] ** 0.5
+        sqrt_one_minus_alphas_cumprod_t = (1.0 - self.alphas_cumprod[t]) ** 0.5
         
-        # Access registered buffers with proper tensor handling
-        device = x_start.device
-        t = t.to(device)
+        # Reshape for broadcasting
+        sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1)
+        sqrt_one_minus_alphas_cumprod_t = sqrt_one_minus_alphas_cumprod_t.view(-1, 1)
         
-        # Ensure we're working with proper tensors
-        alphas_cumprod = self.alphas_cumprod
-        if not isinstance(alphas_cumprod, torch.Tensor):
-            alphas_cumprod = torch.tensor(alphas_cumprod, device=device)
-        else:
-            alphas_cumprod = alphas_cumprod.to(device)
-        
-        sqrt_alphas_cumprod_t = torch.index_select(
-            torch.sqrt(alphas_cumprod), 0, t.long()
-        ).view(-1, 1)
-        
-        sqrt_one_minus_alphas_cumprod_t = torch.index_select(
-            torch.sqrt(1.0 - alphas_cumprod), 0, t.long()
-        ).view(-1, 1)
-        
-        return sqrt_alphas_cumprod_t * x_start_float + sqrt_one_minus_alphas_cumprod_t * noise
+        return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
     
     def compute_loss(self, x_start, t):
-        """Compute diffusion training loss."""
+        """Compute diffusion training loss with path integral regularization."""
         batch_size = x_start.shape[0]
         device = x_start.device
         
+        # Convert discrete tokens to continuous for diffusion
+        x_start_continuous = F.one_hot(x_start, num_classes=self.vocab_size).float()
+        
+        # Sample noise
+        noise = torch.randn_like(x_start_continuous)
+        
         # Add noise
-        noise = torch.randn_like(x_start.float())
-        x_noisy = self.add_noise(x_start, t, noise)
+        x_noisy = self.add_noise(x_start_continuous, t, noise)
         
-        # Convert back to discrete tokens (round and clamp)
-        x_noisy_discrete = torch.clamp(torch.round(x_noisy), 0, self.vocab_size - 1).long()
+        # Convert back to token indices for model input
+        x_noisy_tokens = torch.argmax(x_noisy, dim=-1)
         
-        # Predict the original tokens
-        predicted_logits = self.forward(x_noisy_discrete, t)
+        # Predict original tokens
+        predicted_logits = self.forward(x_noisy_tokens, t)
         
-        # Cross-entropy loss
-        loss = F.cross_entropy(
+        # Compute reconstruction loss
+        reconstruction_loss = F.cross_entropy(
             predicted_logits.view(-1, self.vocab_size),
             x_start.view(-1),
             ignore_index=0  # Ignore padding tokens
         )
         
-        return loss
+        # Path diversity regularization (encourage exploration) - using stored path_outputs from forward pass
+        path_diversity_loss = 0.0
+        if self.training and hasattr(self, '_last_path_outputs') and len(self._last_path_outputs) > 1:
+            for i in range(len(self._last_path_outputs)):
+                for j in range(i + 1, len(self._last_path_outputs)):
+                    similarity = F.cosine_similarity(
+                        self._last_path_outputs[i].mean(dim=1), 
+                        self._last_path_outputs[j].mean(dim=1), 
+                        dim=-1
+                    ).mean()
+                    path_diversity_loss += similarity
+            
+            path_diversity_loss = path_diversity_loss / (self.num_paths * (self.num_paths - 1) / 2)
+        
+        total_loss = reconstruction_loss + 0.1 * path_diversity_loss
+        
+        return total_loss
+
+
+# Legacy alias for compatibility
+FinancialDiffusionModel = QuantumInspiredFinancialDiffusionModel
 
 
 class FinancialDataset(Dataset):
