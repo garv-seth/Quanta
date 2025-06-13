@@ -509,11 +509,11 @@ def show_recent_data():
             st.rerun()
 
 def model_training_page():
-    st.header("🌟 Quasar Small Training")
+    st.header("🌟 Quasar Small Fine-tuning")
     
     st.markdown("""
-    **Quasar Small** is a state-of-the-art diffusion-based GPT model specifically designed for quantitative finance.
-    It combines transformer architecture with diffusion processes for superior financial text generation and analysis.
+    **Quasar Small** is a pre-trained diffusion-based GPT model specifically designed for quantitative finance.
+    It comes ready to use and can be fine-tuned on your specific financial data for enhanced performance.
     """)
     
     col1, col2 = st.columns([1, 2])
@@ -542,9 +542,9 @@ def model_training_page():
             help="Learning rate for the optimizer"
         )
         
-        st.subheader("Training Parameters")
-        num_epochs = st.slider("Training Epochs", 5, 50, 15)
-        max_length = st.selectbox("Max Sequence Length", [256, 512, 1024], index=1)
+        st.subheader("Fine-tuning Parameters")
+        num_epochs = st.slider("Fine-tuning Epochs", 1, 10, 3)
+        st.info("Pre-trained model only needs 1-5 epochs for fine-tuning")
         
         # Training data source
         st.subheader("Training Data")
@@ -556,11 +556,11 @@ def model_training_page():
             st.info("Using sample financial texts")
         
         # Initialize and train model
-        if st.button("🚀 Start Quasar Training", type="primary"):
+        if st.button("🚀 Start Fine-tuning", type="primary"):
             if not QUASAR_AVAILABLE:
-                st.error("Quasar Small model not available. Please check installation.")
+                st.error("Quasar Pre-trained model not available. Please check installation.")
                 return
-            train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_length, use_database)
+            train_quasar_model(model_size, batch_size, learning_rate, num_epochs, use_database)
     
     with col2:
         st.subheader("Training Progress")
@@ -572,7 +572,7 @@ def model_training_page():
             else:
                 st.info("No training history available yet")
 
-def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_length, use_database):
+def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, use_database):
     """Train Quasar Small model with advanced diffusion techniques"""
     try:
         # Create pre-trained model
