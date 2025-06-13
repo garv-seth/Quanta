@@ -5,6 +5,13 @@ that automatically adapts to available hardware and trains for proper duration.
 """
 
 import streamlit as st
+import os
+import sys
+
+# Fix PyTorch compatibility issues with Streamlit
+os.environ['TORCH_SHOW_CPP_STACKTRACES'] = '0'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +20,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import time
-import os
 import json
 import math
 import random
@@ -22,8 +28,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import gc
-import requests
-from io import StringIO
 
 # Try importing optional dependencies
 try:
@@ -456,9 +460,13 @@ class FinancialDiffusionModel(nn.Module):
         self.dropout = nn.Dropout(0.1)
         
         # Noise schedule (cosine schedule for better performance)
-        self.register_buffer('betas', self._cosine_beta_schedule())
-        self.register_buffer('alphas', 1.0 - self.betas)
-        self.register_buffer('alphas_cumprod', torch.cumprod(self.alphas, dim=0))
+        betas = self._cosine_beta_schedule()
+        alphas = 1.0 - betas
+        alphas_cumprod = torch.cumprod(alphas, dim=0)
+        
+        self.register_buffer('betas', betas)
+        self.register_buffer('alphas', alphas)
+        self.register_buffer('alphas_cumprod', alphas_cumprod)
         
     def _cosine_beta_schedule(self, s=0.008):
         """Cosine noise schedule for stable training."""
@@ -505,12 +513,15 @@ class FinancialDiffusionModel(nn.Module):
         # Convert discrete tokens to continuous for noise addition
         x_start_float = x_start.float()
         
+        # Access registered buffers properly
+        alphas_cumprod = self.alphas_cumprod
+        
         sqrt_alphas_cumprod_t = torch.gather(
-            torch.sqrt(self.alphas_cumprod), 0, t
+            torch.sqrt(alphas_cumprod), 0, t
         ).view(-1, 1)
         
         sqrt_one_minus_alphas_cumprod_t = torch.gather(
-            torch.sqrt(1.0 - self.alphas_cumprod), 0, t
+            torch.sqrt(1.0 - alphas_cumprod), 0, t
         ).view(-1, 1)
         
         return sqrt_alphas_cumprod_t * x_start_float + sqrt_one_minus_alphas_cumprod_t * noise
@@ -719,9 +730,9 @@ class QuasarTrainer:
         if PSUTIL_AVAILABLE:
             try:
                 mem = psutil.virtual_memory()
-                stats['ram_percent'] = mem.percent
-                stats['ram_available_gb'] = mem.available / (1024**3)
-                stats['cpu_percent'] = psutil.cpu_percent()
+                stats['ram_percent'] = float(mem.percent)
+                stats['ram_available_gb'] = float(mem.available / (1024**3))
+                stats['cpu_percent'] = float(psutil.cpu_percent())
             except:
                 stats['ram_percent'] = 50.0
                 stats['cpu_percent'] = 25.0
@@ -731,9 +742,9 @@ class QuasarTrainer:
         
         if torch.cuda.is_available():
             try:
-                stats['vram_allocated_gb'] = torch.cuda.memory_allocated() / (1024**3)
-                stats['vram_total_gb'] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                stats['vram_percent'] = (stats['vram_allocated_gb'] / stats['vram_total_gb']) * 100
+                stats['vram_allocated_gb'] = float(torch.cuda.memory_allocated() / (1024**3))
+                stats['vram_total_gb'] = float(torch.cuda.get_device_properties(0).total_memory / (1024**3))
+                stats['vram_percent'] = float((stats['vram_allocated_gb'] / stats['vram_total_gb']) * 100)
             except:
                 stats['vram_allocated_gb'] = 0.0
                 stats['vram_total_gb'] = 8.0
