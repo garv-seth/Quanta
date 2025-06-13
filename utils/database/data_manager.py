@@ -1,299 +1,333 @@
-"""
-Database Data Manager for Financial Text Diffusion Model
 
-Handles storing and retrieving financial data from PostgreSQL database
+"""
+Database Data Manager for Financial Models
+
+Handles storing and retrieving model weights, training data, and performance metrics
+using Replit's built-in database system.
 """
 
-from sqlalchemy.orm import Session
-from database.schema import (
-    DatabaseManager, FinancialCompany, FinancialNews, EarningsTranscript,
-    SECFiling, MarketIndicator, TrainingText, ModelCheckpoint
-)
-from data_collection.financial_data_collector import FinancialDataCollector, collect_comprehensive_dataset
-from typing import List, Dict, Optional
-import logging
+import json
+import pickle
+import numpy as np
 from datetime import datetime
+from typing import Dict, List, Any, Optional
+from replit import db
 
-logger = logging.getLogger(__name__)
 
-class FinancialDataManager:
-    """Manages financial data storage and retrieval"""
+class ModelDataManager:
+    """Manages model data storage and retrieval using Replit database"""
     
     def __init__(self):
-        self.db_manager = DatabaseManager()
-        self.db_manager.create_tables()
-        self.data_collector = FinancialDataCollector()
+        self.db = db
+        self.model_prefix = "financial_model_"
+        self.training_data_prefix = "training_data_"
+        self.performance_prefix = "performance_"
     
-    def collect_and_store_data(self) -> Dict[str, int]:
-        """Collect fresh financial data and store in database"""
-        logger.info("Starting data collection and storage process")
-        
-        # Collect comprehensive dataset
-        dataset = collect_comprehensive_dataset()
-        
-        session = self.db_manager.get_session()
-        counts = {'companies': 0, 'news': 0, 'earnings': 0, 'sec_filings': 0, 'market_indicators': 0}
-        
+    def save_model_weights(self, model_name: str, model_data: Dict) -> str:
+        """Save model weights and configuration to database"""
         try:
-            # Store company data
-            for company_data in dataset['companies']:
-                existing = session.query(FinancialCompany).filter_by(symbol=company_data['symbol']).first()
-                
-                if existing:
-                    # Update existing record
-                    for key, value in company_data.items():
-                        if hasattr(existing, key):
-                            setattr(existing, key, value)
-                    existing.updated_at = datetime.utcnow()
-                else:
-                    # Create new record
-                    company = FinancialCompany(**company_data)
-                    session.add(company)
-                    counts['companies'] += 1
-            
-            # Store news data
-            for news_item in dataset['news']:
-                # Check if news already exists
-                existing = session.query(FinancialNews).filter_by(link=news_item['link']).first()
-                
-                if not existing:
-                    news = FinancialNews(**news_item)
-                    session.add(news)
-                    counts['news'] += 1
-            
-            # Store earnings data
-            for earnings_data in dataset['earnings']:
-                earnings = EarningsTranscript(**earnings_data)
-                session.add(earnings)
-                counts['earnings'] += 1
-            
-            # Store SEC filings
-            for filing_data in dataset['sec_filings']:
-                existing = session.query(SECFiling).filter_by(
-                    accession_number=filing_data['accession_number']
-                ).first()
-                
-                if not existing:
-                    filing = SECFiling(**filing_data)
-                    session.add(filing)
-                    counts['sec_filings'] += 1
-            
-            # Store market indicators
-            for indicator_data in dataset['market_analysis']:
-                indicator = MarketIndicator(**indicator_data)
-                session.add(indicator)
-                counts['market_indicators'] += 1
-            
-            session.commit()
-            logger.info(f"Data stored successfully: {counts}")
-            
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error storing data: {str(e)}")
-            raise
-        finally:
-            self.db_manager.close_session(session)
-        
-        return counts
-    
-    def prepare_training_texts(self) -> List[str]:
-        """Prepare training texts from stored financial data"""
-        session = self.db_manager.get_session()
-        training_texts = []
-        
-        try:
-            # Get company business summaries
-            companies = session.query(FinancialCompany).all()
-            for company in companies:
-                if company.business_summary and len(company.business_summary.split()) > 10:
-                    training_texts.append(company.business_summary)
-                    
-                    # Store as training text
-                    training_text = TrainingText(
-                        original_text=company.business_summary,
-                        source_type='company_info',
-                        source_id=company.id,
-                        symbol=company.symbol,
-                        text_length=len(company.business_summary.split())
-                    )
-                    session.add(training_text)
-            
-            # Get news articles
-            news_items = session.query(FinancialNews).all()
-            for news in news_items:
-                if news.title and len(news.title.split()) > 5:
-                    training_texts.append(news.title)
-                if news.summary and len(news.summary.split()) > 10:
-                    training_texts.append(news.summary)
-                    
-                    # Store as training text
-                    training_text = TrainingText(
-                        original_text=news.summary,
-                        source_type='news',
-                        source_id=news.id,
-                        symbol=news.symbol,
-                        text_length=len(news.summary.split())
-                    )
-                    session.add(training_text)
-            
-            # Get earnings transcripts
-            earnings = session.query(EarningsTranscript).all()
-            for earning in earnings:
-                if earning.transcript_summary and len(earning.transcript_summary.split()) > 10:
-                    training_texts.append(earning.transcript_summary)
-                    
-                    # Store as training text
-                    training_text = TrainingText(
-                        original_text=earning.transcript_summary,
-                        source_type='earnings',
-                        source_id=earning.id,
-                        symbol=earning.symbol,
-                        text_length=len(earning.transcript_summary.split())
-                    )
-                    session.add(training_text)
-            
-            session.commit()
-            logger.info(f"Prepared {len(training_texts)} training texts")
-            
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error preparing training texts: {str(e)}")
-            raise
-        finally:
-            self.db_manager.close_session(session)
-        
-        return training_texts
-    
-    def save_model_checkpoint(self, model_name: str, model_config: Dict, 
-                            training_params: Dict, performance_metrics: Dict,
-                            epoch: int, loss: float, checkpoint_path: str,
-                            is_best: bool = False) -> int:
-        """Save model checkpoint to database"""
-        session = self.db_manager.get_session()
-        
-        try:
-            checkpoint = ModelCheckpoint(
-                model_name=model_name,
-                checkpoint_path=checkpoint_path,
-                model_config=model_config,
-                training_params=training_params,
-                performance_metrics=performance_metrics,
-                epoch=epoch,
-                loss=loss,
-                is_best=is_best
-            )
-            
-            session.add(checkpoint)
-            session.commit()
-            
-            checkpoint_id = checkpoint.id
-            logger.info(f"Model checkpoint saved with ID: {checkpoint_id}")
-            
-            return checkpoint_id
-            
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error saving model checkpoint: {str(e)}")
-            raise
-        finally:
-            self.db_manager.close_session(session)
-    
-    def get_best_model_checkpoint(self, model_name: str) -> Optional[ModelCheckpoint]:
-        """Get the best model checkpoint for a given model name"""
-        session = self.db_manager.get_session()
-        
-        try:
-            checkpoint = session.query(ModelCheckpoint).filter_by(
-                model_name=model_name,
-                is_best=True
-            ).first()
-            
-            return checkpoint
-            
-        except Exception as e:
-            logger.error(f"Error retrieving best model checkpoint: {str(e)}")
-            return None
-        finally:
-            self.db_manager.close_session(session)
-    
-    def get_training_statistics(self) -> Dict:
-        """Get training data statistics"""
-        session = self.db_manager.get_session()
-        
-        try:
-            stats = {
-                'total_companies': session.query(FinancialCompany).count(),
-                'total_news': session.query(FinancialNews).count(),
-                'total_earnings': session.query(EarningsTranscript).count(),
-                'total_sec_filings': session.query(SECFiling).count(),
-                'total_market_indicators': session.query(MarketIndicator).count(),
-                'total_training_texts': session.query(TrainingText).count(),
-                'total_model_checkpoints': session.query(ModelCheckpoint).count()
+            # Prepare model data for storage
+            storage_data = {
+                'model_name': model_name,
+                'config': model_data.get('config', {}),
+                'tokenizer_vocab': model_data.get('tokenizer_vocab', {}),
+                'tokenizer_inverse_vocab': model_data.get('tokenizer_inverse_vocab', {}),
+                'training_history': model_data.get('training_history', []),
+                'model_info': model_data.get('model_info', {}),
+                'saved_at': datetime.now().isoformat(),
+                'version': '1.0'
             }
             
-            return stats
+            # Convert numpy arrays to lists for JSON serialization
+            if 'token_embeddings' in model_data:
+                storage_data['token_embeddings'] = self._serialize_array(model_data['token_embeddings'])
+            if 'position_embeddings' in model_data:
+                storage_data['position_embeddings'] = self._serialize_array(model_data['position_embeddings'])
+            if 'time_embeddings' in model_data:
+                storage_data['time_embeddings'] = self._serialize_array(model_data['time_embeddings'])
+            if 'output_projection' in model_data:
+                storage_data['output_projection'] = self._serialize_array(model_data['output_projection'])
+            if 'output_bias' in model_data:
+                storage_data['output_bias'] = self._serialize_array(model_data['output_bias'])
+            
+            # Store in database
+            key = f"{self.model_prefix}{model_name}"
+            self.db[key] = storage_data
+            
+            # Store model metadata
+            self._update_model_registry(model_name, storage_data)
+            
+            return key
             
         except Exception as e:
-            logger.error(f"Error getting training statistics: {str(e)}")
-            return {}
-        finally:
-            self.db_manager.close_session(session)
+            raise Exception(f"Failed to save model weights: {str(e)}")
     
-    def get_recent_financial_data(self, limit: int = 100) -> Dict[str, List]:
-        """Get recent financial data for display"""
-        session = self.db_manager.get_session()
-        
+    def load_model_weights(self, model_name: str) -> Dict:
+        """Load model weights and configuration from database"""
         try:
-            # Get recent companies
-            recent_companies = session.query(FinancialCompany).order_by(
-                FinancialCompany.collected_at.desc()
-            ).limit(limit).all()
+            key = f"{self.model_prefix}{model_name}"
             
-            # Get recent news
-            recent_news = session.query(FinancialNews).order_by(
-                FinancialNews.collected_at.desc()
-            ).limit(limit).all()
+            if key not in self.db:
+                raise ValueError(f"Model '{model_name}' not found in database")
             
-            # Get recent market indicators
-            recent_indicators = session.query(MarketIndicator).order_by(
-                MarketIndicator.collected_at.desc()
-            ).limit(limit).all()
+            storage_data = self.db[key]
+            
+            # Deserialize arrays
+            model_data = {
+                'config': storage_data.get('config', {}),
+                'tokenizer_vocab': storage_data.get('tokenizer_vocab', {}),
+                'tokenizer_inverse_vocab': storage_data.get('tokenizer_inverse_vocab', {}),
+                'training_history': storage_data.get('training_history', []),
+                'model_info': storage_data.get('model_info', {}),
+                'saved_at': storage_data.get('saved_at'),
+                'version': storage_data.get('version', '1.0')
+            }
+            
+            # Deserialize numpy arrays
+            if 'token_embeddings' in storage_data:
+                model_data['token_embeddings'] = self._deserialize_array(storage_data['token_embeddings'])
+            if 'position_embeddings' in storage_data:
+                model_data['position_embeddings'] = self._deserialize_array(storage_data['position_embeddings'])
+            if 'time_embeddings' in storage_data:
+                model_data['time_embeddings'] = self._deserialize_array(storage_data['time_embeddings'])
+            if 'output_projection' in storage_data:
+                model_data['output_projection'] = self._deserialize_array(storage_data['output_projection'])
+            if 'output_bias' in storage_data:
+                model_data['output_bias'] = self._deserialize_array(storage_data['output_bias'])
+            
+            return model_data
+            
+        except Exception as e:
+            raise Exception(f"Failed to load model weights: {str(e)}")
+    
+    def save_training_data(self, dataset_name: str, texts: List[str], metadata: Dict = None) -> str:
+        """Save training data to database"""
+        try:
+            training_data = {
+                'dataset_name': dataset_name,
+                'texts': texts,
+                'metadata': metadata or {},
+                'num_texts': len(texts),
+                'saved_at': datetime.now().isoformat(),
+                'total_characters': sum(len(text) for text in texts),
+                'avg_length': np.mean([len(text.split()) for text in texts])
+            }
+            
+            key = f"{self.training_data_prefix}{dataset_name}"
+            self.db[key] = training_data
+            
+            return key
+            
+        except Exception as e:
+            raise Exception(f"Failed to save training data: {str(e)}")
+    
+    def load_training_data(self, dataset_name: str) -> List[str]:
+        """Load training data from database"""
+        try:
+            key = f"{self.training_data_prefix}{dataset_name}"
+            
+            if key not in self.db:
+                raise ValueError(f"Training data '{dataset_name}' not found in database")
+            
+            training_data = self.db[key]
+            return training_data.get('texts', [])
+            
+        except Exception as e:
+            raise Exception(f"Failed to load training data: {str(e)}")
+    
+    def save_performance_metrics(self, model_name: str, metrics: Dict) -> str:
+        """Save model performance metrics"""
+        try:
+            performance_data = {
+                'model_name': model_name,
+                'metrics': metrics,
+                'recorded_at': datetime.now().isoformat()
+            }
+            
+            key = f"{self.performance_prefix}{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            self.db[key] = performance_data
+            
+            return key
+            
+        except Exception as e:
+            raise Exception(f"Failed to save performance metrics: {str(e)}")
+    
+    def get_model_list(self) -> List[Dict]:
+        """Get list of all stored models"""
+        try:
+            models = []
+            
+            # Get model registry
+            if 'model_registry' in self.db:
+                registry = self.db['model_registry']
+                for model_name, info in registry.items():
+                    models.append({
+                        'name': model_name,
+                        'saved_at': info.get('saved_at'),
+                        'config': info.get('config', {}),
+                        'training_epochs': len(info.get('training_history', []))
+                    })
+            
+            return models
+            
+        except Exception as e:
+            return []
+    
+    def get_training_datasets(self) -> List[Dict]:
+        """Get list of all stored training datasets"""
+        try:
+            datasets = []
+            
+            for key in self.db.keys():
+                if key.startswith(self.training_data_prefix):
+                    dataset_data = self.db[key]
+                    datasets.append({
+                        'name': dataset_data.get('dataset_name'),
+                        'num_texts': dataset_data.get('num_texts', 0),
+                        'total_characters': dataset_data.get('total_characters', 0),
+                        'avg_length': dataset_data.get('avg_length', 0),
+                        'saved_at': dataset_data.get('saved_at')
+                    })
+            
+            return datasets
+            
+        except Exception as e:
+            return []
+    
+    def delete_model(self, model_name: str) -> bool:
+        """Delete a model from database"""
+        try:
+            key = f"{self.model_prefix}{model_name}"
+            
+            if key in self.db:
+                del self.db[key]
+                
+                # Update registry
+                if 'model_registry' in self.db:
+                    registry = self.db['model_registry']
+                    if model_name in registry:
+                        del registry[model_name]
+                        self.db['model_registry'] = registry
+                
+                return True
+            
+            return False
+            
+        except Exception as e:
+            return False
+    
+    def delete_training_data(self, dataset_name: str) -> bool:
+        """Delete training data from database"""
+        try:
+            key = f"{self.training_data_prefix}{dataset_name}"
+            
+            if key in self.db:
+                del self.db[key]
+                return True
+            
+            return False
+            
+        except Exception as e:
+            return False
+    
+    def get_database_stats(self) -> Dict:
+        """Get database usage statistics"""
+        try:
+            total_keys = len(list(self.db.keys()))
+            model_count = len([k for k in self.db.keys() if k.startswith(self.model_prefix)])
+            dataset_count = len([k for k in self.db.keys() if k.startswith(self.training_data_prefix)])
+            performance_count = len([k for k in self.db.keys() if k.startswith(self.performance_prefix)])
             
             return {
-                'companies': [
-                    {
-                        'symbol': company.symbol,
-                        'name': company.company_name,
-                        'sector': company.sector,
-                        'market_cap': company.market_cap,
-                        'revenue': company.revenue,
-                        'collected_at': company.collected_at.isoformat() if company.collected_at else None
-                    }
-                    for company in recent_companies
-                ],
-                'news': [
-                    {
-                        'title': news.title,
-                        'summary': news.summary[:200] + '...' if news.summary and len(news.summary) > 200 else news.summary,
-                        'source': news.source,
-                        'published': news.published,
-                        'collected_at': news.collected_at.isoformat() if news.collected_at else None
-                    }
-                    for news in recent_news
-                ],
-                'market_indicators': [
-                    {
-                        'indicator': indicator.indicator,
-                        'current_value': indicator.current_value,
-                        'change_percent': indicator.change_percent,
-                        'analysis_date': indicator.analysis_date.isoformat() if indicator.analysis_date else None
-                    }
-                    for indicator in recent_indicators
-                ]
+                'total_keys': total_keys,
+                'model_count': model_count,
+                'dataset_count': dataset_count,
+                'performance_records': performance_count,
+                'last_updated': datetime.now().isoformat()
             }
             
         except Exception as e:
-            logger.error(f"Error getting recent financial data: {str(e)}")
-            return {'companies': [], 'news': [], 'market_indicators': []}
-        finally:
-            self.db_manager.close_session(session)
+            return {
+                'total_keys': 0,
+                'model_count': 0,
+                'dataset_count': 0,
+                'performance_records': 0,
+                'error': str(e)
+            }
+    
+    def _serialize_array(self, array: np.ndarray) -> List:
+        """Serialize numpy array for JSON storage"""
+        if isinstance(array, np.ndarray):
+            return {
+                'data': array.tolist(),
+                'shape': array.shape,
+                'dtype': str(array.dtype)
+            }
+        return array
+    
+    def _deserialize_array(self, array_data) -> np.ndarray:
+        """Deserialize array from JSON storage"""
+        if isinstance(array_data, dict) and 'data' in array_data:
+            return np.array(array_data['data'], dtype=array_data.get('dtype', 'float32')).reshape(array_data['shape'])
+        return np.array(array_data)
+    
+    def _update_model_registry(self, model_name: str, model_data: Dict):
+        """Update the model registry with new model info"""
+        try:
+            if 'model_registry' not in self.db:
+                self.db['model_registry'] = {}
+            
+            registry = self.db['model_registry']
+            registry[model_name] = {
+                'saved_at': model_data.get('saved_at'),
+                'config': model_data.get('config', {}),
+                'training_history': model_data.get('training_history', []),
+                'version': model_data.get('version', '1.0')
+            }
+            
+            self.db['model_registry'] = registry
+            
+        except Exception as e:
+            pass  # Registry update is optional
+    
+    def backup_database(self) -> Dict:
+        """Create a backup of all database content"""
+        try:
+            backup_data = {}
+            
+            for key in self.db.keys():
+                backup_data[key] = self.db[key]
+            
+            backup_info = {
+                'backup_created_at': datetime.now().isoformat(),
+                'total_keys': len(backup_data),
+                'data': backup_data
+            }
+            
+            return backup_info
+            
+        except Exception as e:
+            raise Exception(f"Failed to create backup: {str(e)}")
+    
+    def restore_database(self, backup_data: Dict) -> bool:
+        """Restore database from backup"""
+        try:
+            if 'data' not in backup_data:
+                raise ValueError("Invalid backup format")
+            
+            # Clear existing data (optional)
+            # for key in list(self.db.keys()):
+            #     del self.db[key]
+            
+            # Restore data
+            for key, value in backup_data['data'].items():
+                self.db[key] = value
+            
+            return True
+            
+        except Exception as e:
+            return False
+
+
+# Singleton instance
+model_data_manager = ModelDataManager()

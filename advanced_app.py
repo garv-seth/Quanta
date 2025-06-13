@@ -59,1216 +59,811 @@ except ImportError as e:
 
 try:
     from utils.simple_text_processor import SimpleTextProcessor
+    TEXT_PROCESSOR_AVAILABLE = True
 except ImportError as e:
+    TEXT_PROCESSOR_AVAILABLE = False
     SimpleTextProcessor = None
+
+# Database imports with error handling
+DATABASE_AVAILABLE = False
+RealFinancialDataManager = None
 
 try:
     from database.real_data_manager import RealFinancialDataManager
-    from database.init_db import setup_database
     DATABASE_AVAILABLE = True
 except ImportError as e:
     DATABASE_AVAILABLE = False
-    RealFinancialDataManager = None
-
-# Simplified data manager for database operations
-class SimpleDataManager:
-    def __init__(self):
-        self.db_connected = False
-        try:
-            import os
-            from database.schema import DatabaseManager
-            self.db_manager = DatabaseManager()
-            self.db_manager.create_tables()
-            self.db_connected = True
-        except Exception as e:
-            st.warning(f"Database connection failed: {e}")
-    
-    def collect_and_store_sample_data(self):
-        """Generate sample financial data for training"""
-        return {
-            'companies': 10,
-            'news': 25,
-            'sec_filings': 5,
-            'market_indicators': 4
-        }
-    
-    def prepare_sample_training_texts(self):
-        """Return sample financial training texts"""
-        return [
-            "The company reported strong quarterly earnings with revenue growth of 15% year-over-year and improved operating margins across all business segments.",
-            "Market volatility increased following Federal Reserve policy announcements regarding interest rate adjustments and inflation concerns.",
-            "Investment portfolio performance exceeded expectations with returns of 12% driven by strategic asset allocation and risk management practices.",
-            "Operating cash flow remained robust at $250 million supporting continued business expansion and shareholder return initiatives.",
-            "The merger and acquisition strategy strengthened market position while achieving cost synergies and operational efficiencies.",
-            "Financial results demonstrated resilience despite challenging economic conditions with stable revenue and improved profit margins.",
-            "Strategic investments in technology and innovation delivered measurable returns through automation and operational improvements.",
-            "Balance sheet fundamentals remained strong with improved debt-to-equity ratios and enhanced liquidity positions.",
-            "Risk management protocols effectively mitigated market exposure while maintaining growth opportunities and competitive advantages.",
-            "Quarterly guidance reflects management confidence in sustainable business model and long-term value creation strategies."
-        ]
-    
-    def get_training_statistics(self):
-        """Return sample statistics"""
-        return {
-            'total_companies': 50,
-            'total_news': 150,
-            'total_earnings': 25,
-            'total_sec_filings': 15,
-            'total_market_indicators': 20,
-            'total_training_texts': 100,
-            'total_model_checkpoints': 3
-        }
-
-# Real financial data collection functions
-def collect_real_financial_data():
-    """Collect real financial data using Yahoo Finance and news APIs"""
-    collected_data = {
-        'companies': [],
-        'news': [],
-        'market_indicators': []
-    }
-    
-    # Major S&P 500 companies for data collection
-    major_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'JNJ', 'V']
-    
-    # Collect company data
-    for symbol in major_symbols:
-        try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            company_data = {
-                'symbol': symbol,
-                'company_name': info.get('longName', symbol),
-                'sector': info.get('sector', 'Unknown'),
-                'industry': info.get('industry', 'Unknown'),
-                'business_summary': info.get('longBusinessSummary', ''),
-                'market_cap': info.get('marketCap', 0),
-                'revenue': info.get('totalRevenue', 0),
-                'collected_at': datetime.now().isoformat()
-            }
-            collected_data['companies'].append(company_data)
-            
-        except Exception as e:
-            st.warning(f"Error collecting data for {symbol}: {str(e)}")
-            continue
-    
-    # Collect market indicators
-    indices = ['^GSPC', '^DJI', '^IXIC', '^VIX']
-    
-    for index in indices:
-        try:
-            ticker = yf.Ticker(index)
-            hist = ticker.history(period='2d')
-            
-            if not hist.empty:
-                latest = hist.iloc[-1]
-                prev = hist.iloc[-2] if len(hist) > 1 else latest
-                
-                change = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
-                
-                indicator_data = {
-                    'indicator': index,
-                    'current_value': float(latest['Close']),
-                    'previous_value': float(prev['Close']),
-                    'change_percent': float(change),
-                    'volume': int(latest['Volume']) if 'Volume' in latest.index else 0,
-                    'analysis_date': str(hist.index[-1]),
-                    'collected_at': datetime.now().isoformat()
-                }
-                collected_data['market_indicators'].append(indicator_data)
-                
-        except Exception as e:
-            st.warning(f"Error collecting market data for {index}: {str(e)}")
-            continue
-    
-    # Collect financial news
-    try:
-        # Try Yahoo Finance RSS feed
-        feed = feedparser.parse('https://feeds.finance.yahoo.com/rss/2.0/headline')
-        
-        for entry in feed.entries[:10]:
-            news_item = {
-                'title': entry.get('title', ''),
-                'summary': entry.get('summary', ''),
-                'link': entry.get('link', ''),
-                'published': entry.get('published', ''),
-                'source': 'Yahoo Finance',
-                'collected_at': datetime.now().isoformat()
-            }
-            collected_data['news'].append(news_item)
-            
-    except Exception as e:
-        st.warning(f"Error collecting news: {str(e)}")
-    
-    return collected_data
-
-def extract_training_texts_from_data(data):
-    """Extract training texts from collected financial data"""
-    training_texts = []
-    
-    # Extract from company business summaries
-    for company in data.get('companies', []):
-        summary = company.get('business_summary', '')
-        if summary and len(summary.split()) > 10:
-            training_texts.append(summary)
-            
-            # Create additional training text from company data
-            market_cap = company.get('market_cap', 0)
-            revenue = company.get('revenue', 0)
-            
-            if market_cap and revenue:
-                performance_text = f"{company.get('company_name', '')} operates in the {company.get('sector', '')} sector with a market capitalization of ${market_cap:,.0f} and annual revenue of ${revenue:,.0f}."
-                training_texts.append(performance_text)
-    
-    # Extract from news
-    for news in data.get('news', []):
-        title = news.get('title', '')
-        summary = news.get('summary', '')
-        
-        if title and len(title.split()) > 5:
-            training_texts.append(title)
-        if summary and len(summary.split()) > 10:
-            training_texts.append(summary)
-    
-    # Create market analysis texts
-    for indicator in data.get('market_indicators', []):
-        change_pct = indicator.get('change_percent', 0)
-        indicator_name = indicator.get('indicator', '')
-        current_value = indicator.get('current_value', 0)
-        
-        if change_pct > 0:
-            market_text = f"The {indicator_name} index gained {change_pct:.2f}% to close at {current_value:.2f}, reflecting positive market sentiment and investor confidence."
-        elif change_pct < 0:
-            market_text = f"The {indicator_name} index declined {abs(change_pct):.2f}% to {current_value:.2f}, indicating market volatility and cautious investor behavior."
-        else:
-            market_text = f"The {indicator_name} index remained stable at {current_value:.2f}, showing balanced market conditions."
-        
-        training_texts.append(market_text)
-    
-    return [text for text in training_texts if text and len(text.split()) > 5]
-
-# Page configuration is already set at the top of the file
 
 # Initialize session state
-if 'advanced_model' not in st.session_state:
-    st.session_state.advanced_model = None
-if 'data_manager' not in st.session_state:
-    # Try to use real database manager first
-    if DATABASE_AVAILABLE and RealFinancialDataManager:
+def initialize_session_state():
+    if 'quasar_model' not in st.session_state:
+        st.session_state.quasar_model = None
+    if 'advanced_model' not in st.session_state:
+        st.session_state.advanced_model = None
+    if 'training_data' not in st.session_state:
+        st.session_state.training_data = []
+    if 'collected_financial_data' not in st.session_state:
+        st.session_state.collected_financial_data = {}
+    if 'database_connected' not in st.session_state:
+        st.session_state.database_connected = False
+    if 'data_manager' not in st.session_state:
+        st.session_state.data_manager = None
+
+# Initialize database connection
+def initialize_database():
+    if DATABASE_AVAILABLE and not st.session_state.database_connected:
         try:
             st.session_state.data_manager = RealFinancialDataManager()
             st.session_state.database_connected = True
+            return True
         except Exception as e:
-            st.session_state.data_manager = SimpleDataManager()
             st.session_state.database_connected = False
-    else:
-        st.session_state.data_manager = SimpleDataManager()
-        st.session_state.database_connected = False
-if 'training_data' not in st.session_state:
-    st.session_state.training_data = []
+            return False
+    return st.session_state.database_connected
 
-# Initialize pre-trained Quasar model
-if 'advanced_model' not in st.session_state:
-    if QUASAR_AVAILABLE:
-        try:
-            st.session_state.advanced_model = QuasarFactory.create_pretrained_model()
-            st.session_state.model_trained = True
-        except Exception as e:
-            st.session_state.advanced_model = None
-            st.session_state.model_trained = False
-    else:
-        st.session_state.advanced_model = None
-        st.session_state.model_trained = False
+# Initialize everything
+initialize_session_state()
 
-# Force initialize if not available but Quasar is available
-if QUASAR_AVAILABLE and (not hasattr(st.session_state, 'advanced_model') or st.session_state.advanced_model is None):
-    try:
-        st.session_state.advanced_model = QuasarFactory.create_pretrained_model()
-        st.session_state.model_trained = True
-    except Exception:
-        pass
-
-if 'model_trained' not in st.session_state:
-    st.session_state.model_trained = False
-
+# Streamlit App
 def main():
-    st.title("🧠 Advanced Financial Diffusion Language Model")
-    st.markdown("Pre-trained transformer-based diffusion model for financial text generation and refinement")
-    st.markdown("---")
-    
-    # Sidebar navigation
-    with st.sidebar:
-        st.header("Navigation")
-        page = st.selectbox(
-            "Select Page",
-            ["Data Collection", "Model Training", "Text Generation", "Model Management", "Database Analytics"]
-        )
-        
-        st.header("System Status")
-        
-        # Model status
-        if QUASAR_AVAILABLE and hasattr(st.session_state, 'advanced_model') and st.session_state.advanced_model:
-            st.success("✅ Advanced Model Ready")
-            model_info = st.session_state.advanced_model.get_model_info()
-            st.info(f"Parameters: {model_info['total_parameters']:,}")
-            st.info(f"Vocab Size: {model_info['vocab_size']:,}")
-        else:
-            # Try to initialize now if not already done
-            if QUASAR_AVAILABLE and QuasarFactory:
-                try:
-                    st.session_state.advanced_model = QuasarFactory.create_pretrained_model()
-                    st.session_state.model_trained = True
-                    st.success("✅ Advanced Model Ready")
-                    model_info = st.session_state.advanced_model.get_model_info()
-                    st.info(f"Parameters: {model_info['total_parameters']:,}")
-                    st.info(f"Vocab Size: {model_info['vocab_size']:,}")
-                except Exception:
-                    st.warning("⚠️ Model Not Trained")
-            else:
-                st.warning("⚠️ Model Not Trained")
-        
-        # Database status
-        if st.session_state.data_manager and hasattr(st.session_state.data_manager, 'db_connected') and st.session_state.data_manager.db_connected:
-            st.success("✅ Database Connected")
-        else:
-            st.warning("⚠️ Using Sample Data")
-    
+    st.title("🧠 Advanced Financial Diffusion LLM")
+    st.markdown("*Pre-trained models ready for financial analysis and text generation*")
+
+    # Sidebar for navigation
+    st.sidebar.title("Navigation")
+
+    # Model status in sidebar
+    st.sidebar.subheader("🤖 Model Status")
+
+    if QUASAR_AVAILABLE:
+        st.sidebar.success("✅ Quasar Pre-trained Available")
+    else:
+        st.sidebar.error("❌ Quasar Pre-trained Unavailable")
+
+    if st.session_state.quasar_model:
+        st.sidebar.info("🔥 Quasar Model Loaded")
+    elif st.session_state.advanced_model:
+        st.sidebar.info("🔧 Custom Model Loaded")
+    else:
+        st.sidebar.warning("⚠️ No Model Loaded")
+
+    # Database status
+    if initialize_database():
+        st.sidebar.success("✅ Database Connected")
+    else:
+        st.sidebar.warning("⚠️ Database Unavailable")
+
+    # Page selection
+    page_options = [
+        "🏠 Pre-trained Models Hub",
+        "🧪 Interactive Playground", 
+        "📊 Live Financial Data",
+        "⚙️ Model Fine-tuning",
+        "📈 Financial Analysis",
+        "🔧 Model Management"
+    ]
+
+    selected_page = st.sidebar.selectbox("Select Page", page_options)
+
     # Route to selected page
-    if page == "Data Collection":
-        data_collection_page()
-    elif page == "Model Training":
-        model_training_page()
-    elif page == "Text Generation":
-        text_generation_page()
-    elif page == "Model Management":
+    if selected_page == "🏠 Pre-trained Models Hub":
+        pretrained_models_hub()
+    elif selected_page == "🧪 Interactive Playground":
+        interactive_playground()
+    elif selected_page == "📊 Live Financial Data":
+        live_financial_data_page()
+    elif selected_page == "⚙️ Model Fine-tuning":
+        model_finetuning_page()
+    elif selected_page == "📈 Financial Analysis":
+        financial_analysis_page()
+    elif selected_page == "🔧 Model Management":
         model_management_page()
-    elif page == "Database Analytics":
-        database_analytics_page()
 
-def data_collection_page():
-    st.header("📊 Real-Time Financial Data Collection")
-    
+def pretrained_models_hub():
+    """Pre-trained models hub with immediate functionality"""
+    st.header("🏠 Pre-trained Models Hub")
+
     st.markdown("""
-    Collect live financial data from multiple sources:
-    - Yahoo Finance (company data, stock prices, financial statements)
-    - Financial news feeds (RSS from major outlets)
-    - SEC EDGAR filings (10-K, 10-Q summaries)
-    - Market indicators and indices
+    Welcome to the **Quasar Financial AI** models hub! These models come pre-trained on extensive financial data 
+    and are ready to use immediately. No training required!
     """)
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("Data Sources")
-        
-        # Data collection controls
-        collect_companies = st.checkbox("Collect Company Data", value=True)
-        collect_news = st.checkbox("Collect Financial News", value=True)
-        collect_sec = st.checkbox("Collect SEC Filings", value=True)
-        collect_market = st.checkbox("Collect Market Data", value=True)
-        
-        num_companies = st.slider("Number of Companies", 5, 50, 10)
-        
-        if st.button("🔄 Start Data Collection", type="primary"):
-            collect_financial_data(collect_companies, collect_news, collect_sec, collect_market, num_companies)
-    
-    with col2:
-        st.subheader("Collection Status")
-        
-        # Show data collection status
-        if st.session_state.data_manager:
-            try:
-                stats = st.session_state.data_manager.get_training_statistics()
-                
-                if stats:
-                    col_a, col_b, col_c = st.columns(3)
-                    
-                    with col_a:
-                        st.metric("Companies", stats.get('total_companies', 0))
-                        st.metric("News Articles", stats.get('total_news', 0))
-                    
-                    with col_b:
-                        st.metric("Earnings Records", stats.get('total_earnings', 0))
-                        st.metric("SEC Filings", stats.get('total_sec_filings', 0))
-                    
-                    with col_c:
-                        st.metric("Market Indicators", stats.get('total_market_indicators', 0))
-                        st.metric("Training Texts", stats.get('total_training_texts', 0))
-                
-                # Show recent data
-                st.subheader("Recent Financial Data")
-                if st.button("📈 Show Recent Data"):
-                    show_recent_data()
-                    
-            except Exception as e:
-                st.error(f"Error loading statistics: {str(e)}")
 
-def collect_financial_data(collect_companies, collect_news, collect_sec, collect_market, num_companies):
-    """Collect financial data from various sources"""
-    with st.spinner("Collecting live financial data from Yahoo Finance and storing in PostgreSQL..."):
-        try:
-            if st.session_state.database_connected and hasattr(st.session_state.data_manager, 'collect_all_live_data'):
-                # Use real database collection
-                counts = st.session_state.data_manager.collect_all_live_data()
-                
-                # Get training texts from database
-                training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
-                st.session_state.training_data = training_texts
-                
-                # Get recent data for display
-                recent_data = st.session_state.data_manager.get_recent_financial_data(limit=50)
-                st.session_state.collected_financial_data = recent_data
-                
-                st.success("Live financial data collected and stored in PostgreSQL database!")
-                
-            else:
-                # Fallback to in-memory collection
-                dataset = collect_real_financial_data()
-                
-                counts = {
-                    'companies': len(dataset.get('companies', [])),
-                    'news': len(dataset.get('news', [])),
-                    'sec_filings': 0,
-                    'market_indicators': len(dataset.get('market_indicators', []))
-                }
-                
-                training_texts = extract_training_texts_from_data(dataset)
-                st.session_state.training_data = training_texts
-                st.session_state.collected_financial_data = dataset
-                
-                st.success("Live financial data collected!")
-                st.info("Database not connected - using in-memory storage")
-            
-            # Display results
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Companies Added", counts.get('companies', 0))
-            with col2:
-                st.metric("News Articles", counts.get('news', 0))
-            with col3:
-                st.metric("SEC Filings", counts.get('sec_filings', 0))
-            with col4:
-                st.metric("Market Indicators", counts.get('market_indicators', 0))
-            
-            st.info(f"Prepared {len(st.session_state.training_data)} training texts from live data")
-            
-        except Exception as e:
-            st.error(f"Data collection failed: {str(e)}")
-            # Final fallback to sample data
-            counts = st.session_state.data_manager.collect_and_store_sample_data()
-            training_texts = st.session_state.data_manager.prepare_sample_training_texts()
-            st.session_state.training_data = training_texts
-            st.warning("Using sample data due to collection error")
-
-def show_recent_data():
-    """Display recent financial data"""
-    if hasattr(st.session_state, 'collected_financial_data') and st.session_state.collected_financial_data:
-        data = st.session_state.collected_financial_data
-        
-        # Display companies
-        if data.get('companies'):
-            st.subheader("📊 Live Company Data from Yahoo Finance")
-            companies_df = pd.DataFrame(data['companies'])
-            
-            # Show key metrics
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                avg_market_cap = companies_df['market_cap'].mean() if 'market_cap' in companies_df.columns and len(companies_df) > 0 else 0
-                st.metric("Avg Market Cap", f"${int(avg_market_cap):,}")
-            with col2:
-                total_companies = len(companies_df)
-                st.metric("Companies", total_companies)
-            with col3:
-                sectors = companies_df['sector'].nunique() if 'sector' in companies_df.columns and len(companies_df) > 0 else 0
-                st.metric("Sectors", sectors)
-            
-            st.dataframe(companies_df[['symbol', 'company_name', 'sector', 'market_cap']], use_container_width=True)
-        
-        # Display market indicators
-        if data.get('market_indicators'):
-            st.subheader("📈 Live Market Indicators")
-            market_df = pd.DataFrame(data['market_indicators'])
-            
-            for _, indicator in market_df.iterrows():
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    indicator_name = str(indicator['indicator'])
-                    current_val = float(indicator['current_value'])
-                    change_pct = float(indicator['change_percent'])
-                    st.metric(
-                        indicator_name,
-                        f"{current_val:.2f}",
-                        f"{change_pct:.2f}%"
-                    )
-                with col2:
-                    if change_pct > 0:
-                        st.success("📈")
-                    else:
-                        st.error("📉")
-        
-        # Display news
-        if data.get('news'):
-            st.subheader("📰 Latest Financial News")
-            news_df = pd.DataFrame(data['news'])
-            
-            for _, news in news_df.iterrows():
-                title = str(news['title'])[:100] if news['title'] else "No title"
-                with st.expander(f"📰 {title}..."):
-                    st.write(f"**Source:** {str(news['source'])}")
-                    st.write(f"**Published:** {str(news['published'])}")
-                    if news['summary']:
-                        st.write(f"**Summary:** {str(news['summary'])}")
-                    if news['link']:
-                        st.write(f"[Read full article]({str(news['link'])})")
-        
-        # Display training data preview
-        if hasattr(st.session_state, 'training_data') and st.session_state.training_data:
-            st.subheader("🧠 Training Data Preview")
-            st.info(f"Total training texts prepared: {len(st.session_state.training_data)}")
-            
-            # Show first few training texts
-            with st.expander("View Sample Training Texts"):
-                for i, text in enumerate(st.session_state.training_data[:5]):
-                    st.write(f"**Text {i+1}:** {text[:200]}...")
-    else:
-        st.warning("No financial data collected yet. Please collect data first from the Data Collection page.")
-        if st.button("Collect Live Data Now"):
-            # Collect real data
-            dataset = collect_real_financial_data()
-            st.session_state.collected_financial_data = dataset
-            training_texts = extract_training_texts_from_data(dataset)
-            st.session_state.training_data = training_texts
-            st.rerun()
-
-def model_training_page():
-    st.header("🌟 Quasar Small Fine-tuning")
-    
-    st.markdown("""
-    **Quasar Small** is a pre-trained diffusion-based GPT model specifically designed for quantitative finance.
-    It comes ready to use and can be fine-tuned on your specific financial data for enhanced performance.
-    """)
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("Model Configuration")
-        
-        model_size = st.selectbox(
-            "Model Size",
-            ["Small (Fast Training)", "Medium (Better Performance)"],
-            index=0,
-            help="Choose model size based on your compute resources"
-        )
-        
-        batch_size = st.selectbox(
-            "Batch Size",
-            [2, 4, 8, 16],
-            index=1,
-            help="Larger batch sizes require more memory"
-        )
-        
-        learning_rate = st.selectbox(
-            "Learning Rate",
-            [1e-5, 5e-5, 1e-4, 5e-4],
-            index=2,
-            help="Learning rate for the optimizer"
-        )
-        
-        st.subheader("Fine-tuning Parameters")
-        num_epochs = st.slider("Fine-tuning Epochs", 1, 10, 3)
-        st.info("Pre-trained model only needs 1-5 epochs for fine-tuning")
-        
-        # Training data source
-        st.subheader("Training Data")
-        use_database = st.checkbox("Use Real Financial Data", value=True)
-        
-        if use_database:
-            st.info("Using live financial data from database")
-        else:
-            st.info("Using sample financial texts")
-        
-        # Initialize and train model
-        if st.button("🚀 Start Fine-tuning", type="primary"):
-            if not QUASAR_AVAILABLE:
-                st.error("Quasar Pre-trained model not available. Please check installation.")
-                return
-            train_quasar_model(model_size, batch_size, learning_rate, num_epochs, use_database)
-    
-    with col2:
-        st.subheader("Training Progress")
-        
-        # Display training progress and results
-        if hasattr(st.session_state, 'quasar_model') and st.session_state.quasar_model:
-            if hasattr(st.session_state.quasar_model, 'training_history') and st.session_state.quasar_model.training_history:
-                display_quasar_training_history()
-            else:
-                st.info("No training history available yet")
-
-def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, use_database):
-    """Train Quasar Small model with advanced diffusion techniques"""
-    try:
-        # Create pre-trained model
-        model = QuasarFactory.create_pretrained_model()
-        st.session_state.quasar_model = model
-        
-        # Get training data
-        training_texts = []
-        
-        if use_database and hasattr(st.session_state, 'data_manager'):
-            try:
-                # Collect fresh data
-                st.info("Collecting fresh financial data...")
-                results = st.session_state.data_manager.collect_all_live_data()
-                st.success(f"Collected: {results}")
-                
-                # Get training texts from database
-                training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
-                st.success(f"Using {len(training_texts)} real financial texts from database")
-                
-            except Exception as e:
-                st.error(f"Database error: {str(e)}")
-                # Fallback to sample data
-                from data.sample_texts import get_sample_financial_texts
-                training_texts = get_sample_financial_texts()
-                st.warning("Using sample financial texts as fallback")
-        else:
-            # Use sample texts
-            from data.sample_texts import get_sample_financial_texts
-            training_texts = get_sample_financial_texts()
-            st.info(f"Using {len(training_texts)} sample financial texts")
-        
-        if not training_texts:
-            st.error("No training texts available")
-            return
-        
-        # Create fine-tuner for pre-trained model
-        fine_tuner = QuasarFactory.create_fine_tuner(model, learning_rate)
-        
-        # Training progress tracking
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        metrics_container = st.container()
-        
-        def progress_callback(info):
-            progress = info['batch'] / info['total_batches']
-            progress_bar.progress(progress)
-            status_text.text(f"Epoch {info['epoch']+1}/{num_epochs}, Batch {info['batch']}/{info['total_batches']}, Loss: {info['loss']:.6f}")
-        
-        # Start fine-tuning
-        st.info(f"Starting Quasar fine-tuning with {model.get_model_info()['total_parameters']:,} parameters...")
-        
-        training_history = fine_tuner.fine_tune(
-            texts=training_texts,
-            epochs=num_epochs,
-            progress_callback=progress_callback
-        )
-        
-        # Fine-tuning completed
-        progress_bar.progress(1.0)
-        status_text.text("Fine-tuning completed!")
-        
-        # Save model
-        model.save_model("quasar_small_finetuned.json")
-        
-        # Display final metrics
-        final_metrics = training_history[-1] if training_history else {'train_loss': 0.5, 'train_tokens_per_second': 1500}
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Final Loss", f"{final_metrics['train_loss']:.6f}")
-        with col2:
-            st.metric("Fine-tuning Time", f"{num_epochs * 2:.0f} min")
-        with col3:
-            st.metric("Tokens/sec", f"{final_metrics['train_tokens_per_second']:.0f}")
-        
-        st.success("Quasar Small fine-tuning completed successfully!")
-        
-    except Exception as e:
-        st.error(f"Training failed: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
-
-def display_quasar_training_history():
-    """Display Quasar training history and metrics"""
-    if hasattr(st.session_state, 'quasar_model') and st.session_state.quasar_model:
-        model = st.session_state.quasar_model
-        
-        if hasattr(model, 'training_history') and model.training_history:
-            history = model.training_history
-            
-            # Convert to DataFrame for plotting
-            df = pd.DataFrame(history)
-            
-            # Training loss plot
-            st.subheader("Training Loss")
-            if 'train_loss' in df.columns:
-                import plotly.express as px
-                fig = px.line(df, x='epoch', y='train_loss', title='Training Loss Over Time')
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Model information
-            st.subheader("Model Information")
-            model_info = model.get_model_info()
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Parameters", f"{model_info['total_parameters']:,}")
-                st.metric("Model Size", f"{model_info['model_size_mb']:.1f} MB")
-            
-            with col2:
-                st.metric("Vocabulary Size", model_info['vocab_size'])
-                st.metric("Max Sequence Length", model_info['max_seq_len'])
-            
-            with col3:
-                st.metric("Training Epochs", model_info['training_epochs'])
-                st.metric("Diffusion Steps", model_info['num_diffusion_steps'])
-            
-            # Latest metrics
-            if history:
-                latest = history[-1]
-                st.subheader("Latest Training Metrics")
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Train Loss", f"{latest.get('train_loss', 0):.6f}")
-                with col2:
-                    st.metric("Learning Rate", f"{latest.get('learning_rate', 0):.2e}")
-                with col3:
-                    st.metric("Tokens/Second", f"{latest.get('train_tokens_per_second', 0):.0f}")
-        else:
-            st.info("No training history available")
-    else:
-        st.info("No model trained yet")
-
-def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_length, num_epochs, use_database):
-    """Train the financial diffusion model"""
-    try:
-        # Use simplified diffusion model if available
-        if DIFFUSION_MODEL_AVAILABLE and SimpleFinancialDiffusion:
-            st.session_state.advanced_model = SimpleFinancialDiffusion(
-                vocab_size=vocab_size,
-                embedding_dim=d_model,
-                num_steps=50
-            )
-        elif ADVANCED_MODULES_AVAILABLE and FinancialDiffusionLLM:
-            st.session_state.advanced_model = FinancialDiffusionLLM(
-                vocab_size=vocab_size,
-                d_model=d_model,
-                num_heads=num_heads,
-                num_layers=num_layers,
-                max_seq_length=max_seq_length,
-                num_diffusion_steps=1000
-            )
-        else:
-            st.error("No diffusion model available for training")
-            return
-        
-        # Get real financial training data from PostgreSQL database
-        training_texts = []
-        
-        if use_database and st.session_state.database_connected:
-            try:
-                # First, ensure we have fresh data
-                if hasattr(st.session_state.data_manager, 'collect_all_live_data'):
-                    st.info("Collecting fresh Yahoo Finance data...")
-                    results = st.session_state.data_manager.collect_all_live_data()
-                    st.success(f"Collected: {results}")
-                
-                # Get training texts from real financial data
-                if hasattr(st.session_state.data_manager, 'prepare_training_texts_from_db'):
-                    training_texts = st.session_state.data_manager.prepare_training_texts_from_db()
-                    st.success(f"Using {len(training_texts)} real financial texts from database")
-                    
-            except Exception as e:
-                st.error(f"Database error: {str(e)}")
-                return
-        
-        # Only use fallback if no database connection
-        if not training_texts:
-            if st.session_state.training_data:
-                training_texts = st.session_state.training_data
-                st.warning("Using previously collected data")
-            else:
-                st.error("No real financial data available. Please initialize database connection.")
-                return
-        
-        if not training_texts:
-            st.error("No training texts available. Please collect data first.")
-            return
-        
-        st.info(f"Training model with {len(training_texts)} texts...")
-        
-        # Create progress tracking
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # Train model with progress updates
-        with st.spinner("Training financial diffusion model..."):
-            progress_bar.progress(0.1)
-            status_text.text("Starting training...")
-            
-            # Train the model
-            losses = st.session_state.advanced_model.train(training_texts, epochs=num_epochs)
-            
-            progress_bar.progress(1.0)
-            status_text.text(f"Training completed! Final loss: {losses[-1]:.6f}" if losses else "Training completed!")
-        
-        # Mark as trained
-        st.session_state.advanced_model.is_trained = True
-        st.session_state.model_trained = True
-        
-        # Save model checkpoint to database
-        checkpoint_name = f"financial_diffusion_llm_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # Save to database if available
-        if st.session_state.database_connected and hasattr(st.session_state.data_manager, 'save_model_checkpoint'):
-            try:
-                model_info = st.session_state.advanced_model.get_model_info() if hasattr(st.session_state.advanced_model, 'get_model_info') else {"type": "SimpleFinancialDiffusion"}
-                checkpoint_id = st.session_state.data_manager.save_model_checkpoint(
-                    model_name="FinancialDiffusionLLM",
-                    model_config=model_info,
-                    training_params={"epochs": num_epochs, "texts": len(training_texts), "use_database": use_database},
-                    performance_metrics={"final_loss": losses[-1] if losses else 0.0, "training_texts_count": len(training_texts)},
-                    epoch=num_epochs,
-                    loss=losses[-1] if losses else 0.0,
-                    checkpoint_path=f"database_checkpoint_{checkpoint_name}",
-                    is_best=True
-                )
-                st.success(f"Training completed! Model saved to PostgreSQL database (ID: {checkpoint_id})")
-            except Exception as e:
-                st.warning(f"Training completed but database save failed: {str(e)}")
-                st.success("Training completed successfully!")
-        else:
-            st.success("Training completed successfully!")
-            st.info("Model checkpoints will be saved to database when connection is available")
-        
-    except Exception as e:
-        st.error(f"Training failed: {str(e)}")
-
-def display_advanced_training_history():
-    """Display advanced training history"""
-    if not st.session_state.advanced_model.training_history:
-        return
-    
-    df = pd.DataFrame(st.session_state.advanced_model.training_history)
-    
-    # Training loss chart
-    st.line_chart(df.set_index('epoch')['loss'])
-    
-    # Training statistics
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
-        st.metric("Total Epochs", len(df))
+        st.subheader("🌟 Quasar Small")
+        st.info("**2.1M Parameters**\nFast inference, optimized for real-time analysis")
+
+        if st.button("🚀 Load Quasar Small", type="primary"):
+            if QUASAR_AVAILABLE:
+                with st.spinner("Loading pre-trained model..."):
+                    st.session_state.quasar_model = QuasarFactory.create_small()
+                    st.success("✅ Quasar Small loaded successfully!")
+                    st.rerun()
+            else:
+                st.error("Quasar models not available")
+
     with col2:
-        st.metric("Final Loss", f"{df['loss'].iloc[-1]:.6f}")
+        st.subheader("🔥 Quasar Medium")
+        st.info("**8.2M Parameters**\nBetter performance, deeper financial understanding")
+
+        if st.button("🚀 Load Quasar Medium"):
+            if QUASAR_AVAILABLE:
+                with st.spinner("Loading pre-trained model..."):
+                    st.session_state.quasar_model = QuasarFactory.create_medium()
+                    st.success("✅ Quasar Medium loaded successfully!")
+                    st.rerun()
+            else:
+                st.error("Quasar models not available")
+
     with col3:
-        st.metric("Best Loss", f"{df['loss'].min():.6f}")
+        st.subheader("🛠️ Custom Models")
+        st.info("Load your own fine-tuned models")
 
-def text_generation_page():
-    st.header("📝 Advanced Text Generation & Refinement")
-    
-    if not st.session_state.model_trained or not st.session_state.advanced_model:
-        st.error("Please train the model first using the Model Training page.")
+        model_files = [f for f in os.listdir('.') if f.endswith('.json') and 'quasar' in f.lower()]
+        if model_files:
+            selected_file = st.selectbox("Saved Models", model_files)
+            if st.button("📂 Load Custom"):
+                if QUASAR_AVAILABLE:
+                    try:
+                        st.session_state.quasar_model = QuasarFactory.load_from_file(selected_file)
+                        st.success(f"✅ Loaded {selected_file}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to load: {str(e)}")
+        else:
+            st.info("No saved models found")
+
+    # Quick Demo Section
+    if st.session_state.quasar_model:
+        st.divider()
+        st.subheader("🎯 Quick Demo")
+
+        demo_col1, demo_col2 = st.columns(2)
+
+        with demo_col1:
+            st.markdown("**Financial Text Generation**")
+            demo_prompt = st.text_input("Enter a financial prompt:", 
+                                      value="Apple's quarterly earnings show")
+
+            generation_temp = st.slider("Creativity Level", 0.1, 1.5, 0.8, 0.1)
+            use_live_data = st.checkbox("Use Live Market Context", value=True)
+
+            if st.button("Generate Text", type="primary"):
+                with st.spinner("Generating..."):
+                    generated = st.session_state.quasar_model.generate_text(
+                        demo_prompt, 
+                        max_length=100,
+                        temperature=generation_temp,
+                        use_market_context=use_live_data
+                    )
+                    st.write("**Generated Text:**")
+                    st.write(generated)
+
+        with demo_col2:
+            st.markdown("**Financial Sentiment Analysis**")
+            sentiment_text = st.text_area("Text to analyze:", 
+                                        value="The company reported strong revenue growth with positive outlook for next quarter")
+
+            if st.button("Analyze Sentiment"):
+                sentiment = st.session_state.quasar_model.analyze_financial_sentiment(sentiment_text)
+
+                # Display sentiment scores
+                col_pos, col_neg, col_neu = st.columns(3)
+                with col_pos:
+                    st.metric("Positive", f"{sentiment['positive']:.2%}", delta=None)
+                with col_neg:
+                    st.metric("Negative", f"{sentiment['negative']:.2%}", delta=None)
+                with col_neu:
+                    st.metric("Neutral", f"{sentiment['neutral']:.2%}", delta=None)
+
+        # Model Information
+        st.divider()
+        st.subheader("📋 Current Model Info")
+        model_info = st.session_state.quasar_model.get_model_info()
+
+        info_col1, info_col2, info_col3 = st.columns(3)
+        with info_col1:
+            st.metric("Parameters", model_info.get('total_parameters', 'N/A'))
+        with info_col2:
+            st.metric("Vocab Size", model_info.get('vocab_size', 'N/A'))
+        with info_col3:
+            st.metric("Training Epochs", len(st.session_state.quasar_model.training_history))
+
+def interactive_playground():
+    """Interactive playground for experimenting with the model"""
+    st.header("🧪 Interactive Playground")
+
+    if not st.session_state.quasar_model:
+        st.warning("⚠️ Please load a model from the Pre-trained Models Hub first")
         return
-    
-    # Generation modes
-    generation_mode = st.selectbox(
-        "Generation Mode",
-        ["Text Refinement", "Text Generation", "Financial Report Generation"]
-    )
-    
-    if generation_mode == "Text Refinement":
-        text_refinement_interface()
-    elif generation_mode == "Text Generation":
-        text_generation_interface()
-    elif generation_mode == "Financial Report Generation":
-        report_generation_interface()
 
-def text_refinement_interface():
-    """Interface for text refinement"""
-    st.subheader("Financial Text Refinement")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Input Text**")
-        
-        # Sample drafts
-        sample_drafts = [
-            "Company did good this quarter. Revenue up.",
-            "Stock price went up. Investors happy. Future looks bright.",
-            "Earnings beat expectations. Growth strong.",
-            "Market tough but we doing fine. Plan working.",
-            "New product selling well. Customers like it."
-        ]
-        
-        selected_draft = st.selectbox("Sample Draft Texts", [""] + sample_drafts)
-        
-        input_text = st.text_area(
-            "Enter draft financial text:",
-            value=selected_draft,
-            height=200,
-            placeholder="Enter your draft financial text here..."
-        )
-        
-        # Refinement parameters
-        num_inference_steps = st.slider("Refinement Steps", 10, 100, 50)
-        
-        refine_button = st.button("🔄 Refine Text", type="primary")
-    
-    with col2:
-        st.write("**Refined Text**")
-        
-        if refine_button and input_text.strip():
-            with st.spinner("Refining text using advanced diffusion model..."):
-                try:
-                    refined_text = st.session_state.advanced_model.refine_text(
-                        input_text, 
-                        num_steps=num_inference_steps
-                    )
-                    
-                    st.text_area(
-                        "Refined output:",
-                        value=refined_text,
-                        height=200,
-                        disabled=True
-                    )
-                    
-                    # Show improvement metrics
-                    st.subheader("Refinement Analysis")
-                    
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.metric("Original Length", len(input_text.split()))
-                        st.metric("Refined Length", len(refined_text.split()))
-                    
-                    with col_b:
-                        improvement_ratio = len(refined_text.split()) / max(1, len(input_text.split()))
-                        st.metric("Length Improvement", f"{improvement_ratio:.2f}x")
-                        
-                        # Simple quality score
-                        quality_score = min(1.0, len(refined_text.split()) / 20.0)
-                        st.metric("Quality Score", f"{quality_score:.3f}")
-                
-                except Exception as e:
-                    st.error(f"Refinement failed: {str(e)}")
-        
-        elif refine_button:
-            st.warning("Please enter some text to refine.")
+    st.markdown("Experiment with different model capabilities and parameters!")
 
-def text_generation_interface():
-    """Interface for text generation"""
-    st.subheader("Financial Text Generation")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Generation Prompt**")
-        
-        # Sample prompts
-        sample_prompts = [
-            "The company's quarterly performance",
-            "Market analysis indicates",
-            "Investment outlook for",
-            "Financial results show",
-            "Economic conditions suggest"
-        ]
-        
-        selected_prompt = st.selectbox("Sample Prompts", [""] + sample_prompts)
-        
-        prompt_text = st.text_area(
-            "Enter generation prompt:",
-            value=selected_prompt,
-            height=100,
-            placeholder="Enter a prompt to generate financial text..."
-        )
-        
-        # Generation parameters
-        max_length = st.slider("Maximum Length", 50, 500, 100)
-        num_inference_steps = st.slider("Generation Steps", 20, 100, 50)
-        
-        generate_button = st.button("🎯 Generate Text", type="primary")
-    
-    with col2:
-        st.write("**Generated Text**")
-        
-        if generate_button and prompt_text.strip():
-            with st.spinner("Generating financial text..."):
-                try:
-                    generated_text = st.session_state.advanced_model.generate_text(
-                        prompt_text,
-                        max_length=max_length
-                    )
-                    
-                    st.text_area(
-                        "Generated output:",
-                        value=generated_text,
-                        height=200,
-                        disabled=True
-                    )
-                    
-                    # Generation statistics
-                    st.subheader("Generation Statistics")
-                    
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.metric("Prompt Length", len(prompt_text.split()))
-                        st.metric("Generated Length", len(generated_text.split()))
-                    
-                    with col_b:
-                        expansion_ratio = len(generated_text.split()) / max(1, len(prompt_text.split()))
-                        st.metric("Expansion Ratio", f"{expansion_ratio:.2f}x")
-                        st.metric("Steps Used", num_inference_steps)
-                
-                except Exception as e:
-                    st.error(f"Generation failed: {str(e)}")
-        
-        elif generate_button:
-            st.warning("Please enter a prompt to generate text.")
+    # Tabs for different functionalities
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 Text Generation", "✨ Text Refinement", "📊 Analysis", "🎛️ Advanced Controls"])
 
-def report_generation_interface():
-    """Interface for financial report generation"""
-    st.subheader("Financial Report Generation")
-    
-    # Report types
-    report_type = st.selectbox(
-        "Report Type",
-        ["Quarterly Earnings Summary", "Market Analysis Report", "Investment Outlook", "Risk Assessment"]
-    )
-    
-    # Company context
-    company_symbol = st.text_input("Company Symbol (optional)", placeholder="e.g., AAPL")
-    
-    if st.button("📊 Generate Financial Report", type="primary"):
-        with st.spinner("Generating comprehensive financial report..."):
-            try:
-                # Create context-aware prompt
-                if company_symbol:
-                    prompt = f"Generate a {report_type.lower()} for {company_symbol}:"
+    with tab1:
+        st.subheader("Financial Text Generation")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            prompt = st.text_area("Enter your prompt:", 
+                                value="The Federal Reserve's recent interest rate decision",
+                                height=100)
+
+            if st.button("🚀 Generate", type="primary", key="gen_btn"):
+                with st.spinner("Generating financial content..."):
+                    result = st.session_state.quasar_model.generate_text(
+                        prompt,
+                        max_length=st.session_state.get('gen_length', 150),
+                        temperature=st.session_state.get('gen_temp', 0.8),
+                        use_market_context=st.session_state.get('use_market', True)
+                    )
+                    st.subheader("Generated Text:")
+                    st.write(result)
+
+                    # Option to save
+                    if st.button("💾 Save Result"):
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        with open(f"generated_text_{timestamp}.txt", "w") as f:
+                            f.write(f"Prompt: {prompt}\n\nGenerated Text:\n{result}")
+                        st.success("Saved to file!")
+
+        with col2:
+            st.markdown("**Generation Settings**")
+            gen_length = st.slider("Max Length", 50, 300, 150, key="gen_length")
+            gen_temp = st.slider("Temperature", 0.1, 2.0, 0.8, 0.1, key="gen_temp")
+            use_market = st.checkbox("Live Market Context", True, key="use_market")
+
+            st.markdown("**Quick Prompts**")
+            quick_prompts = [
+                "Quarterly earnings report summary:",
+                "Stock market outlook for",
+                "Economic indicators suggest",
+                "Investment recommendation for",
+                "Risk assessment shows"
+            ]
+
+            for quick_prompt in quick_prompts:
+                if st.button(f"📌 {quick_prompt}", key=f"quick_{quick_prompt}"):
+                    st.session_state.current_prompt = quick_prompt
+
+    with tab2:
+        st.subheader("Text Refinement")
+
+        input_text = st.text_area("Text to refine:", 
+                                value="The stock did good this quarter and made money",
+                                height=100)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            refinement_strength = st.slider("Refinement Strength", 0.1, 1.0, 0.3, 0.1)
+            inference_steps = st.slider("Inference Steps", 10, 50, 25, 5)
+
+        with col2:
+            if st.button("✨ Refine Text", type="primary"):
+                with st.spinner("Refining text..."):
+                    refined = st.session_state.quasar_model.refine_text(
+                        input_text,
+                        refinement_strength=refinement_strength,
+                        num_inference_steps=inference_steps
+                    )
+
+                    st.subheader("Refined Text:")
+                    st.write(refined)
+
+                    st.subheader("Comparison:")
+                    col_before, col_after = st.columns(2)
+                    with col_before:
+                        st.markdown("**Before:**")
+                        st.write(input_text)
+                    with col_after:
+                        st.markdown("**After:**")
+                        st.write(refined)
+
+    with tab3:
+        st.subheader("Financial Analysis")
+
+        analysis_text = st.text_area("Text to analyze:",
+                                   value="Apple reported record revenue this quarter with strong iPhone sales driving growth",
+                                   height=100)
+
+        if st.button("📊 Analyze", type="primary"):
+            # Sentiment Analysis
+            sentiment = st.session_state.quasar_model.analyze_financial_sentiment(analysis_text)
+
+            st.subheader("Sentiment Analysis")
+
+            # Create sentiment chart
+            sentiment_data = pd.DataFrame({
+                'Sentiment': ['Positive', 'Negative', 'Neutral'],
+                'Score': [sentiment['positive'], sentiment['negative'], sentiment['neutral']]
+            })
+
+            st.bar_chart(sentiment_data.set_index('Sentiment'))
+
+            # Detailed metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Positive Sentiment", f"{sentiment['positive']:.1%}")
+            with col2:
+                st.metric("Negative Sentiment", f"{sentiment['negative']:.1%}")
+            with col3:
+                st.metric("Neutral Sentiment", f"{sentiment['neutral']:.1%}")
+
+    with tab4:
+        st.subheader("Advanced Model Controls")
+
+        # Model parameters
+        st.markdown("**Current Model Parameters**")
+        model_info = st.session_state.quasar_model.get_model_info()
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.json({
+                'Model Type': model_info.get('model_type', 'Unknown'),
+                'Vocab Size': model_info.get('vocab_size', 0),
+                'Embedding Dim': model_info.get('d_model', 0),
+                'Num Layers': model_info.get('num_layers', 0)
+            })
+
+        with col2:
+            st.markdown("**Training History**")
+            if hasattr(st.session_state.quasar_model, 'training_history'):
+                history_df = pd.DataFrame(st.session_state.quasar_model.training_history)
+                if not history_df.empty and 'loss' in history_df.columns:
+                    st.line_chart(history_df.set_index('epoch')['loss'])
                 else:
-                    prompt = f"Generate a {report_type.lower()}:"
-                
-                # Generate report
-                report = st.session_state.advanced_model.generate_text(
-                    prompt,
-                    max_length=300,
-                    num_inference_steps=75
+                    st.info("No training history available")
+
+        # Save current model
+        st.divider()
+        st.markdown("**Save Model**")
+        model_name = st.text_input("Model name:", value=f"quasar_custom_{datetime.now().strftime('%Y%m%d')}")
+
+        if st.button("💾 Save Current Model"):
+            filename = f"{model_name}.json"
+            st.session_state.quasar_model.save_model(filename)
+            st.success(f"Model saved as {filename}")
+
+def live_financial_data_page():
+    """Live financial data collection and display"""
+    st.header("📊 Live Financial Data")
+
+    st.markdown("Real-time financial data collection from Yahoo Finance and other sources.")
+
+    # Data collection controls
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("🔄 Collect Live Data", type="primary"):
+            with st.spinner("Collecting live financial data..."):
+                data = collect_real_financial_data()
+                st.session_state.collected_financial_data = data
+                st.success("Live data collected successfully!")
+                st.rerun()
+
+    with col2:
+        if st.button("📈 Update Market Context"):
+            if st.session_state.quasar_model:
+                with st.spinner("Updating market context..."):
+                    st.session_state.quasar_model._load_market_context()
+                    st.success("Market context updated!")
+
+    with col3:
+        if st.button("🗄️ Store in Database"):
+            if st.session_state.database_connected and st.session_state.collected_financial_data:
+                with st.spinner("Storing data..."):
+                    try:
+                        results = st.session_state.data_manager.collect_all_live_data()
+                        st.success(f"Stored: {results}")
+                    except Exception as e:
+                        st.error(f"Database error: {str(e)}")
+
+    # Display collected data
+    if st.session_state.collected_financial_data:
+        display_financial_data(st.session_state.collected_financial_data)
+    else:
+        st.info("No financial data collected yet. Click 'Collect Live Data' to get started.")
+
+def collect_real_financial_data():
+    """Collect real financial data"""
+    try:
+        # Major stock symbols
+        symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'JNJ', 'V']
+
+        companies = []
+        for symbol in symbols[:5]:  # Limit to 5 for demo
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                companies.append({
+                    'symbol': symbol,
+                    'company_name': info.get('longName', symbol),
+                    'sector': info.get('sector', 'Unknown'),
+                    'market_cap': info.get('marketCap', 0),
+                    'current_price': info.get('currentPrice', 0),
+                    'pe_ratio': info.get('trailingPE', 0)
+                })
+            except:
+                continue
+
+        # Market indices
+        indices = ['^GSPC', '^DJI', '^IXIC', '^VIX']
+        market_data = []
+
+        for index in indices:
+            try:
+                ticker = yf.Ticker(index)
+                hist = ticker.history(period='2d')
+                if not hist.empty:
+                    latest = hist.iloc[-1]
+                    prev = hist.iloc[-2] if len(hist) > 1 else latest
+                    change = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
+
+                    market_data.append({
+                        'symbol': index,
+                        'current_value': float(latest['Close']),
+                        'change_percent': float(change),
+                        'volume': int(latest['Volume']) if 'Volume' in latest.index else 0
+                    })
+            except:
+                continue
+
+        return {
+            'companies': companies,
+            'market_indicators': market_data,
+            'timestamp': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        st.error(f"Error collecting data: {str(e)}")
+        return {}
+
+def display_financial_data(data):
+    """Display collected financial data"""
+
+    # Companies data
+    if data.get('companies'):
+        st.subheader("📊 Company Data")
+        companies_df = pd.DataFrame(data['companies'])
+
+        # Key metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            avg_market_cap = companies_df['market_cap'].mean() if 'market_cap' in companies_df.columns else 0
+            st.metric("Avg Market Cap", f"${avg_market_cap/1e9:.1f}B")
+        with col2:
+            st.metric("Companies", len(companies_df))
+        with col3:
+            sectors = companies_df['sector'].nunique() if 'sector' in companies_df.columns else 0
+            st.metric("Sectors", sectors)
+        with col4:
+            avg_pe = companies_df['pe_ratio'].mean() if 'pe_ratio' in companies_df.columns else 0
+            st.metric("Avg P/E", f"{avg_pe:.1f}")
+
+        st.dataframe(companies_df, use_container_width=True)
+
+    # Market indicators
+    if data.get('market_indicators'):
+        st.subheader("📈 Market Indicators")
+        market_df = pd.DataFrame(data['market_indicators'])
+
+        for _, indicator in market_df.iterrows():
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                color = "🟢" if indicator['change_percent'] > 0 else "🔴" if indicator['change_percent'] < 0 else "🟡"
+                st.write(f"{color} **{indicator['symbol']}**")
+            with col2:
+                st.metric(
+                    f"{indicator['current_value']:.2f}",
+                    f"{indicator['change_percent']:+.2f}%"
                 )
-                
+
+def model_finetuning_page():
+    """Model fine-tuning interface"""
+    st.header("⚙️ Model Fine-tuning")
+
+    if not st.session_state.quasar_model:
+        st.warning("⚠️ Please load a model first")
+        return
+
+    st.markdown("Fine-tune your pre-trained model on specific financial data for enhanced performance.")
+
+    # Fine-tuning configuration
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.subheader("Training Data")
+
+        data_source = st.radio("Data Source:", 
+                              ["Use Live Financial Data", "Upload Custom Text", "Manual Input"])
+
+        training_texts = []
+
+        if data_source == "Use Live Financial Data":
+            if st.session_state.collected_financial_data:
+                # Extract training texts from collected data
+                for company in st.session_state.collected_financial_data.get('companies', []):
+                    training_texts.append(f"{company['company_name']} operates in the {company['sector']} sector with a market cap of ${company.get('market_cap', 0):,}")
+
+                st.info(f"Prepared {len(training_texts)} training texts from live data")
+            else:
+                st.warning("No live data available. Please collect data first.")
+
+        elif data_source == "Upload Custom Text":
+            uploaded_file = st.file_uploader("Upload text file", type=['txt'])
+            if uploaded_file:
+                content = uploaded_file.read().decode('utf-8')
+                training_texts = [line.strip() for line in content.split('\n') if line.strip()]
+                st.info(f"Loaded {len(training_texts)} lines from file")
+
+        else:  # Manual Input
+            manual_text = st.text_area("Enter training text (one sentence per line):", 
+                                     height=150,
+                                     value="Apple reported strong quarterly earnings.\nThe tech sector shows continued growth.\nMarket volatility remains a concern for investors.")
+            training_texts = [line.strip() for line in manual_text.split('\n') if line.strip()]
+
+    with col2:
+        st.subheader("Fine-tuning Settings")
+
+        epochs = st.slider("Training Epochs", 1, 10, 3)
+        learning_rate = st.select_slider("Learning Rate", 
+                                       options=[0.00001, 0.00005, 0.0001, 0.0005, 0.001],
+                                       value=0.0001,
+                                       format_func=lambda x: f"{x:.5f}")
+
+        st.info(f"Pre-trained models typically need only {epochs} epochs for effective fine-tuning")
+
+        # Start fine-tuning
+        if st.button("🔥 Start Fine-tuning", type="primary"):
+            if training_texts:
+                with st.spinner(f"Fine-tuning model on {len(training_texts)} texts..."):
+                    losses = st.session_state.quasar_model.fine_tune(
+                        training_texts, 
+                        epochs=epochs, 
+                        learning_rate=learning_rate
+                    )
+
+                    st.success("Fine-tuning completed!")
+
+                    # Display training progress
+                    st.subheader("Training Progress")
+                    loss_df = pd.DataFrame({'Epoch': range(len(losses)), 'Loss': losses})
+                    st.line_chart(loss_df.set_index('Epoch'))
+
+                    # Save fine-tuned model
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"quasar_finetuned_{timestamp}.json"
+                    st.session_state.quasar_model.save_model(filename)
+                    st.info(f"Fine-tuned model saved as {filename}")
+            else:
+                st.error("No training texts available")
+
+def financial_analysis_page():
+    """Advanced financial analysis features"""
+    st.header("📈 Financial Analysis")
+
+    if not st.session_state.quasar_model:
+        st.warning("⚠️ Please load a model first")
+        return
+
+    st.markdown("Perform advanced financial analysis using your diffusion model.")
+
+    # Analysis tabs
+    tab1, tab2, tab3 = st.tabs(["📊 Market Analysis", "📄 Report Generation", "🎯 Sentiment Analysis"])
+
+    with tab1:
+        st.subheader("Market Analysis")
+
+        if hasattr(st.session_state.quasar_model, 'market_context'):
+            market_context = st.session_state.quasar_model.market_context
+
+            st.markdown("**Current Market Overview**")
+
+            for index, data in market_context.items():
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric(f"{index}", f"{data.get('current', 0):.2f}")
+                with col2:
+                    st.metric("Change", f"{data.get('change', 0):+.2f}%")
+                with col3:
+                    trend_color = "🟢" if data.get('trend') == 'positive' else "🔴" if data.get('trend') == 'negative' else "🟡"
+                    st.write(f"{trend_color} {data.get('trend', 'neutral').title()}")
+
+        # Generate market analysis
+        if st.button("📊 Generate Market Analysis", type="primary"):
+            with st.spinner("Analyzing market conditions..."):
+                analysis_prompt = "Based on current market conditions, provide a comprehensive market analysis including key trends and outlook"
+                analysis = st.session_state.quasar_model.generate_text(
+                    analysis_prompt,
+                    max_length=200,
+                    use_market_context=True
+                )
+
+                st.subheader("Market Analysis Report")
+                st.write(analysis)
+
+    with tab2:
+        st.subheader("Financial Report Generation")
+
+        report_type = st.selectbox("Report Type", 
+                                 ["Quarterly Earnings Summary", "Market Outlook", "Investment Analysis", "Risk Assessment"])
+
+        company_input = st.text_input("Company/Symbol (optional):", placeholder="e.g., AAPL")
+
+        if st.button("📄 Generate Report", type="primary"):
+            with st.spinner("Generating financial report..."):
+                if company_input:
+                    prompt = f"Generate a detailed {report_type.lower()} for {company_input}"
+                else:
+                    prompt = f"Generate a comprehensive {report_type.lower()}"
+
+                report = st.session_state.quasar_model.generate_text(
+                    prompt,
+                    max_length=250,
+                    temperature=0.7,
+                    use_market_context=True
+                )
+
                 st.subheader(f"{report_type}")
-                if company_symbol:
-                    st.subheader(f"Company: {company_symbol}")
-                
+                if company_input:
+                    st.markdown(f"**Subject:** {company_input}")
+
                 st.write(report)
-                
+
                 # Download option
                 st.download_button(
                     label="📥 Download Report",
                     data=report,
-                    file_name=f"{report_type.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.txt",
+                    file_name=f"{report_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.txt",
                     mime="text/plain"
                 )
-            
-            except Exception as e:
-                st.error(f"Report generation failed: {str(e)}")
+
+    with tab3:
+        st.subheader("Batch Sentiment Analysis")
+
+        # Input methods
+        input_method = st.radio("Input Method:", ["Text Area", "File Upload"])
+
+        texts_to_analyze = []
+
+        if input_method == "Text Area":
+            batch_text = st.text_area("Enter texts to analyze (one per line):", 
+                                    height=150,
+                                    value="Apple's revenue exceeded expectations this quarter\nMarket volatility creates uncertainty for investors\nStrong employment data supports economic growth")
+            texts_to_analyze = [line.strip() for line in batch_text.split('\n') if line.strip()]
+
+        else:
+            uploaded_file = st.file_uploader("Upload text file", type=['txt'])
+            if uploaded_file:
+                content = uploaded_file.read().decode('utf-8')
+                texts_to_analyze = [line.strip() for line in content.split('\n') if line.strip()]
+
+        if texts_to_analyze and st.button("🎯 Analyze Sentiment", type="primary"):
+            with st.spinner(f"Analyzing sentiment for {len(texts_to_analyze)} texts..."):
+                results = []
+
+                for i, text in enumerate(texts_to_analyze):
+                    sentiment = st.session_state.quasar_model.analyze_financial_sentiment(text)
+                    results.append({
+                        'Text': text[:50] + "..." if len(text) > 50 else text,
+                        'Positive': sentiment['positive'],
+                        'Negative': sentiment['negative'],
+                        'Neutral': sentiment['neutral'],
+                        'Dominant': max(sentiment.keys(), key=sentiment.get)
+                    })
+
+                # Display results
+                results_df = pd.DataFrame(results)
+                st.dataframe(results_df, use_container_width=True)
+
+                # Summary statistics
+                st.subheader("Summary Statistics")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    avg_positive = results_df['Positive'].mean()
+                    st.metric("Avg Positive", f"{avg_positive:.2%}")
+                with col2:
+                    avg_negative = results_df['Negative'].mean()
+                    st.metric("Avg Negative", f"{avg_negative:.2%}")
+                with col3:
+                    avg_neutral = results_df['Neutral'].mean()
+                    st.metric("Avg Neutral", f"{avg_neutral:.2%}")
 
 def model_management_page():
-    st.header("⚙️ Model Management")
-    
+    """Model management interface"""
+    st.header("🔧 Model Management")
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.subheader("Current Model")
-        
-        if st.session_state.advanced_model:
-            model_info = st.session_state.advanced_model.get_model_info()
+
+        if st.session_state.quasar_model:
+            model_info = st.session_state.quasar_model.get_model_info()
             st.json(model_info)
-            
-            # Save model
-            if st.button("💾 Save Current Model"):
-                save_current_model()
+
+            # Model operations
+            st.subheader("Model Operations")
+
+            model_name = st.text_input("Save as:", value=f"quasar_{datetime.now().strftime('%Y%m%d')}")
+
+            if st.button("💾 Save Model"):
+                filename = f"{model_name}.json"
+                st.session_state.quasar_model.save_model(filename)
+                st.success(f"Model saved as {filename}")
+
+            if st.button("🔄 Reset Model"):
+                if st.confirm("Are you sure you want to reset the model?"):
+                    st.session_state.quasar_model = None
+                    st.success("Model reset successfully")
+                    st.rerun()
         else:
             st.info("No model loaded")
-    
+
     with col2:
-        st.subheader("Load Model")
-        
-        # List available models
-        model_files = [f for f in os.listdir('.') if f.endswith('.json') and 'financial_diffusion' in f]
-        
+        st.subheader("Available Models")
+
+        # List saved models
+        model_files = [f for f in os.listdir('.') if f.endswith('.json') and ('quasar' in f.lower() or 'financial' in f.lower())]
+
         if model_files:
-            selected_model = st.selectbox("Available Models", model_files)
-            
-            if st.button("📂 Load Model"):
-                load_saved_model(selected_model)
+            for model_file in model_files:
+                with st.expander(f"📄 {model_file}"):
+                    # File info
+                    file_size = os.path.getsize(model_file) / 1024  # KB
+                    st.write(f"**Size:** {file_size:.1f} KB")
+
+                    col_load, col_delete = st.columns(2)
+                    with col_load:
+                        if st.button(f"📂 Load", key=f"load_{model_file}"):
+                            if QUASAR_AVAILABLE:
+                                try:
+                                    st.session_state.quasar_model = QuasarFactory.load_from_file(model_file)
+                                    st.success(f"Loaded {model_file}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to load: {str(e)}")
+
+                    with col_delete:
+                        if st.button(f"🗑️ Delete", key=f"delete_{model_file}"):
+                            if st.confirm(f"Delete {model_file}?"):
+                                os.remove(model_file)
+                                st.success(f"Deleted {model_file}")
+                                st.rerun()
         else:
             st.info("No saved models found")
 
-def save_current_model():
-    """Save current model"""
-    if not st.session_state.advanced_model:
-        st.error("No model to save")
-        return
-    
-    try:
-        filename = f"financial_diffusion_llm_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        st.session_state.advanced_model.save_model(filename)
-        st.success(f"Model saved as {filename}")
-    except Exception as e:
-        st.error(f"Failed to save model: {str(e)}")
+        # Model comparison
+        if len(model_files) > 1:
+            st.subheader("Model Comparison")
+            selected_models = st.multiselect("Select models to compare:", model_files)
 
-def load_saved_model(filename):
-    """Load saved model"""
-    try:
-        if not ADVANCED_MODULES_AVAILABLE or not FinancialDiffusionLLM:
-            st.error("Advanced model not available for loading")
-            return
-            
-        model = FinancialDiffusionLLM()
-        model.load_model(filename)
-        st.session_state.advanced_model = model
-        st.session_state.model_trained = model.is_trained
-        st.success(f"Model loaded from {filename}")
-        st.rerun()
-    except Exception as e:
-        st.error(f"Failed to load model: {str(e)}")
+            if len(selected_models) >= 2 and st.button("📊 Compare Models"):
+                comparison_data = []
+                for model_file in selected_models:
+                    try:
+                        # Load model info without fully loading the model
+                        with open(model_file, 'r') as f:
+                            model_data = json.load(f)
 
-def database_analytics_page():
-    st.header("📊 Database Analytics & Management")
-    
-    # Database connection status
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if getattr(st.session_state, 'database_connected', False):
-            st.success("PostgreSQL Connected")
-        else:
-            st.warning("Using In-Memory Storage")
-    
-    with col2:
-        if st.button("🔄 Refresh Connection"):
-            st.session_state.data_manager = None
-            st.rerun()
-    
-    with col3:
-        if st.button("🗄️ Initialize Database"):
-            try:
-                if DATABASE_AVAILABLE:
-                    from database.init_db import setup_database
-                    success = setup_database()
-                    if success:
-                        st.success("Database initialized successfully!")
-                    else:
-                        st.error("Database initialization failed")
-                else:
-                    st.error("Database modules not available")
-            except Exception as e:
-                st.error(f"Database initialization error: {str(e)}")
-    
-    # Database statistics
-    if hasattr(st.session_state.data_manager, 'get_training_statistics'):
-        try:
-            stats = st.session_state.data_manager.get_training_statistics()
-            
-            st.subheader("📈 Database Statistics")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.metric("Companies", stats.get('total_companies', 0))
-            with col2:
-                st.metric("News Articles", stats.get('total_news', 0))
-            with col3:
-                st.metric("Market Indicators", stats.get('total_market_indicators', 0))
-            with col4:
-                st.metric("Training Texts", stats.get('total_training_texts', 0))
-            with col5:
-                st.metric("Model Checkpoints", stats.get('total_model_checkpoints', 0))
-                
-        except Exception as e:
-            st.error(f"Error loading database statistics: {str(e)}")
-    
-    # Recent data overview
-    if hasattr(st.session_state.data_manager, 'get_recent_financial_data'):
-        try:
-            st.subheader("📊 Recent Financial Data")
-            
-            recent_data = st.session_state.data_manager.get_recent_financial_data(limit=10)
-            
-            # Recent companies
-            if recent_data.get('companies'):
-                st.write("**Recent Companies:**")
-                companies_df = pd.DataFrame(recent_data['companies'])
-                st.dataframe(companies_df, use_container_width=True)
-            
-            # Recent market indicators
-            if recent_data.get('market_indicators'):
-                st.write("**Market Indicators:**")
-                indicators_df = pd.DataFrame(recent_data['market_indicators'])
-                st.dataframe(indicators_df, use_container_width=True)
-            
-            # Recent news
-            if recent_data.get('news'):
-                st.write("**Recent News Headlines:**")
-                for news in recent_data['news'][:5]:
-                    st.write(f"• {news['title'][:100]}...")
-                    
-        except Exception as e:
-            st.error(f"Error loading recent data: {str(e)}")
-    
-    # Database management actions
-    st.subheader("🛠️ Database Management")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📥 Collect Live Data"):
-            if hasattr(st.session_state.data_manager, 'collect_all_live_data'):
-                try:
-                    with st.spinner("Collecting live financial data..."):
-                        results = st.session_state.data_manager.collect_all_live_data()
-                        st.success(f"Data collected: {results}")
-                except Exception as e:
-                    st.error(f"Data collection failed: {str(e)}")
-            else:
-                st.warning("Live data collection not available")
-    
-    with col2:
-        if st.button("🧠 Prepare Training Data"):
-            if hasattr(st.session_state.data_manager, 'prepare_training_texts_from_db'):
-                try:
-                    with st.spinner("Preparing training texts..."):
-                        texts = st.session_state.data_manager.prepare_training_texts_from_db()
-                        st.session_state.training_data = texts
-                        st.success(f"Prepared {len(texts)} training texts")
-                except Exception as e:
-                    st.error(f"Training data preparation failed: {str(e)}")
-            else:
-                st.warning("Database training data preparation not available")
-    
-    with col3:
-        if st.button("🗂️ Export Data"):
-            st.info("Data export functionality coming soon")
-    
-    # Connection details
-    if getattr(st.session_state, 'database_connected', False):
-        st.subheader("🔗 Database Connection Info")
-        db_url = os.getenv('DATABASE_URL', 'Not available')
-        if db_url != 'Not available':
-            try:
-                import urllib.parse as urlparse
-                url = urlparse.urlparse(db_url)
-                st.write(f"**Host:** {url.hostname}")
-                st.write(f"**Port:** {url.port}")
-                st.write(f"**Database:** {url.path[1:] if url.path else 'Unknown'}")
-                st.write(f"**User:** {url.username}")
-            except:
-                st.write("Connection details not available")
+                        comparison_data.append({
+                            'Model': model_file,
+                            'Vocab Size': model_data.get('config', {}).get('vocab_size', 'N/A'),
+                            'Embedding Dim': model_data.get('config', {}).get('d_model', 'N/A'),
+                            'Layers': model_data.get('config', {}).get('num_layers', 'N/A'),
+                            'Training Epochs': len(model_data.get('training_history', []))
+                        })
+                    except:
+                        continue
+
+                if comparison_data:
+                    comparison_df = pd.DataFrame(comparison_data)
+                    st.dataframe(comparison_df, use_container_width=True)
 
 if __name__ == "__main__":
     main()
