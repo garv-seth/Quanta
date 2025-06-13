@@ -9,10 +9,10 @@ import os
 import json
 from datetime import datetime
 
-from models.diffusion_model import DiffusionModel
-from utils.text_processor import TextProcessor
-from utils.training import ModelTrainer
-from utils.evaluation import ModelEvaluator
+# from models.diffusion_model import DiffusionModel
+# from utils.text_processor import TextProcessor
+# from utils.training import ModelTrainer
+# from utils.evaluation import ModelEvaluator
 
 # Set page configuration
 st.set_page_config(
@@ -26,11 +26,11 @@ st.set_page_config(
 if 'model' not in st.session_state:
     st.session_state.model = None
 if 'text_processor' not in st.session_state:
-    st.session_state.text_processor = TextProcessor()
+    st.session_state.text_processor = None
 if 'trainer' not in st.session_state:
     st.session_state.trainer = None
 if 'evaluator' not in st.session_state:
-    st.session_state.evaluator = ModelEvaluator()
+    st.session_state.evaluator = None
 if 'training_history' not in st.session_state:
     st.session_state.training_history = []
 
