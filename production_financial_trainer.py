@@ -350,8 +350,16 @@ def main():
     
     initialize_session_state()
     
-    st.title("⚡ Financial Diffusion Model - Production Training")
-    st.markdown("Real financial diffusion model training optimized for RTX 4060 hardware")
+    # Quanta branding
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        try:
+            st.image("attached_assets/QuantaLogo_1749842610909.png", width=100)
+        except:
+            st.markdown("**Q**")  # Fallback if logo not found
+    with col2:
+        st.title("Quanta - Quasar Model Training")
+        st.markdown("Advanced financial diffusion model training system")
     
     # Hardware info sidebar
     with st.sidebar:
@@ -580,11 +588,11 @@ def monitoring_interface():
         
         with col1:
             fig = px.line(df, y='loss', title='Training Loss')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="loss_chart")
         
         with col2:
             fig = px.line(df, y='learning_rate', title='Learning Rate')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="lr_chart")
         
         # Memory usage
         memory_stats = trainer.get_memory_stats()
