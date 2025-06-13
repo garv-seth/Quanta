@@ -307,27 +307,26 @@ def main():
         
         st.header("System Status")
         
-        # Model status - Enhanced debugging
-        st.write(f"Debug: QUASAR_AVAILABLE = {QUASAR_AVAILABLE}")
-        st.write(f"Debug: advanced_model exists = {hasattr(st.session_state, 'advanced_model')}")
-        if hasattr(st.session_state, 'advanced_model'):
-            st.write(f"Debug: advanced_model is not None = {st.session_state.advanced_model is not None}")
-        
+        # Model status
         if QUASAR_AVAILABLE and hasattr(st.session_state, 'advanced_model') and st.session_state.advanced_model:
             st.success("✅ Advanced Model Ready")
             model_info = st.session_state.advanced_model.get_model_info()
             st.info(f"Parameters: {model_info['total_parameters']:,}")
             st.info(f"Vocab Size: {model_info['vocab_size']:,}")
         else:
-            st.warning("⚠️ Model Not Trained")
-            # Try to initialize now
-            if QUASAR_AVAILABLE:
+            # Try to initialize now if not already done
+            if QUASAR_AVAILABLE and QuasarFactory:
                 try:
                     st.session_state.advanced_model = QuasarFactory.create_pretrained_model()
                     st.session_state.model_trained = True
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Model initialization failed: {e}")
+                    st.success("✅ Advanced Model Ready")
+                    model_info = st.session_state.advanced_model.get_model_info()
+                    st.info(f"Parameters: {model_info['total_parameters']:,}")
+                    st.info(f"Vocab Size: {model_info['vocab_size']:,}")
+                except Exception:
+                    st.warning("⚠️ Model Not Trained")
+            else:
+                st.warning("⚠️ Model Not Trained")
         
         # Database status
         if st.session_state.data_manager and hasattr(st.session_state.data_manager, 'db_connected') and st.session_state.data_manager.db_connected:
