@@ -231,13 +231,7 @@ def extract_training_texts_from_data(data):
     
     return [text for text in training_texts if text and len(text.split()) > 5]
 
-# Set page configuration
-st.set_page_config(
-    page_title="Advanced Financial Diffusion LLM",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page configuration is already set at the top of the file
 
 # Initialize session state
 if 'advanced_model' not in st.session_state:
@@ -407,13 +401,13 @@ def show_recent_data():
             # Show key metrics
             col1, col2, col3 = st.columns(3)
             with col1:
-                avg_market_cap = companies_df['market_cap'].mean() if 'market_cap' in companies_df.columns else 0
-                st.metric("Avg Market Cap", f"${avg_market_cap:,.0f}")
+                avg_market_cap = companies_df['market_cap'].mean() if 'market_cap' in companies_df.columns and len(companies_df) > 0 else 0
+                st.metric("Avg Market Cap", f"${int(avg_market_cap):,}")
             with col2:
                 total_companies = len(companies_df)
                 st.metric("Companies", total_companies)
             with col3:
-                sectors = companies_df['sector'].nunique() if 'sector' in companies_df.columns else 0
+                sectors = companies_df['sector'].nunique() if 'sector' in companies_df.columns and len(companies_df) > 0 else 0
                 st.metric("Sectors", sectors)
             
             st.dataframe(companies_df[['symbol', 'company_name', 'sector', 'market_cap']], use_container_width=True)
@@ -426,13 +420,16 @@ def show_recent_data():
             for _, indicator in market_df.iterrows():
                 col1, col2 = st.columns([3, 1])
                 with col1:
+                    indicator_name = str(indicator['indicator'])
+                    current_val = float(indicator['current_value'])
+                    change_pct = float(indicator['change_percent'])
                     st.metric(
-                        indicator['indicator'],
-                        f"{indicator['current_value']:.2f}",
-                        f"{indicator['change_percent']:.2f}%"
+                        indicator_name,
+                        f"{current_val:.2f}",
+                        f"{change_pct:.2f}%"
                     )
                 with col2:
-                    if indicator['change_percent'] > 0:
+                    if change_pct > 0:
                         st.success("📈")
                     else:
                         st.error("📉")
@@ -443,13 +440,14 @@ def show_recent_data():
             news_df = pd.DataFrame(data['news'])
             
             for _, news in news_df.iterrows():
-                with st.expander(f"📰 {news['title'][:100]}..."):
-                    st.write(f"**Source:** {news['source']}")
-                    st.write(f"**Published:** {news['published']}")
+                title = str(news['title'])[:100] if news['title'] else "No title"
+                with st.expander(f"📰 {title}..."):
+                    st.write(f"**Source:** {str(news['source'])}")
+                    st.write(f"**Published:** {str(news['published'])}")
                     if news['summary']:
-                        st.write(f"**Summary:** {news['summary']}")
+                        st.write(f"**Summary:** {str(news['summary'])}")
                     if news['link']:
-                        st.write(f"[Read full article]({news['link']})")
+                        st.write(f"[Read full article]({str(news['link'])})")
         
         # Display training data preview
         if hasattr(st.session_state, 'training_data') and st.session_state.training_data:
@@ -550,28 +548,15 @@ def train_advanced_model(vocab_size, d_model, num_heads, num_layers, max_seq_len
         status_text = st.empty()
         
         # Train model with progress updates
-        with st.spinner("Training advanced financial diffusion model..."):
-            losses = []
+        with st.spinner("Training financial diffusion model..."):
+            progress_bar.progress(0.1)
+            status_text.text("Starting training...")
             
-            for epoch in range(num_epochs):
-                # Simulate training step
-                epoch_loss = st.session_state.advanced_model.train_step(training_texts)
-                losses.append(epoch_loss)
-                
-                # Update progress
-                progress = (epoch + 1) / num_epochs
-                progress_bar.progress(progress)
-                status_text.text(f"Epoch {epoch + 1}/{num_epochs} - Loss: {epoch_loss:.6f}")
-                
-                # Update training history
-                st.session_state.advanced_model.training_history.append({
-                    'epoch': epoch,
-                    'loss': epoch_loss,
-                    'timestamp': datetime.now().isoformat()
-                })
-                
-                # Small delay for visualization
-                time.sleep(0.1)
+            # Train the model
+            losses = st.session_state.advanced_model.train(training_texts, epochs=num_epochs)
+            
+            progress_bar.progress(1.0)
+            status_text.text(f"Training completed! Final loss: {losses[-1]:.6f}" if losses else "Training completed!")
         
         # Mark as trained
         st.session_state.advanced_model.is_trained = True
