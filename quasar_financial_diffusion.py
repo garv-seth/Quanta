@@ -1338,8 +1338,96 @@ def monitoring_interface():
 
 
 def management_interface():
-    """Model management interface."""
-    st.header("💾 Model Management")
+    """Model management interface with database verification."""
+    st.header("💾 Model Management & Data Verification")
+    
+    # Database verification section
+    st.subheader("🗄️ Database Storage Verification")
+    
+    try:
+        conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+        cursor = conn.cursor()
+        
+        # Get data collection statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_records,
+                COUNT(DISTINCT ticker) as unique_tickers,
+                COUNT(DISTINCT data_source) as data_sources,
+                MIN(collection_timestamp) as first_collection,
+                MAX(collection_timestamp) as last_collection,
+                AVG(api_response_time) as avg_response_time
+            FROM financial_data
+        """)
+        
+        stats = cursor.fetchone()
+        
+        if stats and stats[0] > 0:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Records", f"{stats[0]:,}")
+                st.metric("Unique Companies", stats[1])
+                
+            with col2:
+                st.metric("Data Sources", stats[2])
+                if stats[5]:
+                    st.metric("Avg API Response", f"{stats[5]:.2f}s")
+                
+            with col3:
+                if stats[3]:
+                    st.metric("First Collection", stats[3].strftime("%H:%M:%S"))
+                if stats[4]:
+                    st.metric("Last Collection", stats[4].strftime("%H:%M:%S"))
+            
+            # Show recent data samples
+            st.subheader("🔍 Recent Financial Data (Database Proof)")
+            cursor.execute("""
+                SELECT ticker, company_name, LEFT(text_content, 100) as preview, 
+                       data_source, market_cap, verification_status, collection_timestamp
+                FROM financial_data 
+                ORDER BY collection_timestamp DESC 
+                LIMIT 10
+            """)
+            
+            recent_data = cursor.fetchall()
+            
+            if recent_data:
+                df = pd.DataFrame(recent_data, columns=[
+                    'Ticker', 'Company', 'Text Preview', 'Source', 
+                    'Market Cap', 'Status', 'Timestamp'
+                ])
+                st.dataframe(df, use_container_width=True)
+            
+            # Verification by ticker
+            st.subheader("📈 Data by Company")
+            cursor.execute("""
+                SELECT ticker, company_name, COUNT(*) as record_count,
+                       MAX(market_cap) as market_cap, sector,
+                       verification_status
+                FROM financial_data 
+                GROUP BY ticker, company_name, sector, verification_status
+                ORDER BY record_count DESC
+            """)
+            
+            ticker_data = cursor.fetchall()
+            
+            if ticker_data:
+                ticker_df = pd.DataFrame(ticker_data, columns=[
+                    'Ticker', 'Company', 'Records', 'Market Cap', 'Sector', 'Status'
+                ])
+                st.dataframe(ticker_df, use_container_width=True)
+                
+        else:
+            st.warning("No financial data found in database. Please run data collection first.")
+            
+        cursor.close()
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Database connection failed: {str(e)}")
+    
+    st.divider()
     
     trainer = st.session_state.trainer
     
