@@ -267,6 +267,20 @@ if 'data_manager' not in st.session_state:
         st.session_state.database_connected = False
 if 'training_data' not in st.session_state:
     st.session_state.training_data = []
+
+# Initialize pre-trained Quasar model
+if 'advanced_model' not in st.session_state:
+    if QUASAR_AVAILABLE:
+        try:
+            st.session_state.advanced_model = QuasarFactory.create_pretrained_model()
+            st.session_state.model_trained = True
+        except Exception:
+            st.session_state.advanced_model = None
+            st.session_state.model_trained = False
+    else:
+        st.session_state.advanced_model = None
+        st.session_state.model_trained = False
+
 if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
 
