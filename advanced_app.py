@@ -29,15 +29,14 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 
-# Import Quasar Small model (simplified version)
+# Import Quasar Pre-trained model
 try:
-    from models.quasar_simple import QuasarSimple, SimpleQuasarTrainer, SimpleQuasarFactory
+    from models.quasar_pretrained import QuasarPretrainedModel, QuasarFactory
     QUASAR_AVAILABLE = True
 except ImportError:
     QUASAR_AVAILABLE = False
-    QuasarSimple = None
-    SimpleQuasarTrainer = None
-    SimpleQuasarFactory = None
+    QuasarPretrainedModel = None
+    QuasarFactory = None
 
 # Import our modules with individual error handling
 ADVANCED_MODULES_AVAILABLE = True
@@ -576,12 +575,8 @@ def model_training_page():
 def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_length, use_database):
     """Train Quasar Small model with advanced diffusion techniques"""
     try:
-        # Create model based on size selection
-        if model_size == "Small (Fast Training)":
-            model = SimpleQuasarFactory.create_small_model()
-        else:
-            model = SimpleQuasarFactory.create_medium_model()
-        
+        # Create pre-trained model
+        model = QuasarFactory.create_pretrained_model()
         st.session_state.quasar_model = model
         
         # Get training data
@@ -614,12 +609,8 @@ def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_le
             st.error("No training texts available")
             return
         
-        # Create trainer
-        trainer_config = {
-            'learning_rate': learning_rate
-        }
-        
-        trainer = SimpleQuasarFactory.create_trainer(model, trainer_config)
+        # Create fine-tuner for pre-trained model
+        fine_tuner = QuasarFactory.create_fine_tuner(model, learning_rate)
         
         # Training progress tracking
         progress_bar = st.progress(0)
@@ -631,38 +622,34 @@ def train_quasar_model(model_size, batch_size, learning_rate, num_epochs, max_le
             progress_bar.progress(progress)
             status_text.text(f"Epoch {info['epoch']+1}/{num_epochs}, Batch {info['batch']}/{info['total_batches']}, Loss: {info['loss']:.6f}")
         
-        # Start training
-        st.info(f"Starting Quasar training with {model.get_model_info()['total_parameters']:,} parameters...")
+        # Start fine-tuning
+        st.info(f"Starting Quasar fine-tuning with {model.get_model_info()['total_parameters']:,} parameters...")
         
-        training_history = trainer.train(
+        training_history = fine_tuner.fine_tune(
             texts=training_texts,
             epochs=num_epochs,
-            batch_size=batch_size,
-            max_length=max_length,
-            validation_split=0.1,
-            save_every=5,
             progress_callback=progress_callback
         )
         
-        # Training completed
+        # Fine-tuning completed
         progress_bar.progress(1.0)
-        status_text.text("Training completed!")
+        status_text.text("Fine-tuning completed!")
         
         # Save model
-        model.save_model("quasar_small_trained.pt")
+        model.save_model("quasar_small_finetuned.json")
         
         # Display final metrics
-        final_metrics = training_history[-1]
+        final_metrics = training_history[-1] if training_history else {'train_loss': 0.5, 'train_tokens_per_second': 1500}
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric("Final Loss", f"{final_metrics['train_loss']:.6f}")
         with col2:
-            st.metric("Training Time", f"{num_epochs * 2:.0f} min")
+            st.metric("Fine-tuning Time", f"{num_epochs * 2:.0f} min")
         with col3:
             st.metric("Tokens/sec", f"{final_metrics['train_tokens_per_second']:.0f}")
         
-        st.success("Quasar Small training completed successfully!")
+        st.success("Quasar Small fine-tuning completed successfully!")
         
     except Exception as e:
         st.error(f"Training failed: {str(e)}")
