@@ -440,23 +440,32 @@ class FeynmanPathIntegralDiffusionModel(nn.Module):
         if noise is None:
             noise = torch.randn_like(x_start.float())
 
-        # Get diffusion coefficients
-        sqrt_alphas_cumprod_t = torch.gather(torch.sqrt(self.alphas_cumprod), 0, t).view(-1, 1)
+        # Get diffusion coefficients - fix tensor dimensions
+        batch_size = x_start.shape[0]
+        sqrt_alphas_cumprod_t = torch.gather(torch.sqrt(self.alphas_cumprod), 0, t)
         sqrt_one_minus_alphas_cumprod_t = torch.gather(
             torch.sqrt(1.0 - self.alphas_cumprod), 0, t
-        ).view(-1, 1)
+        )
+        
+        # Reshape for proper broadcasting with input tensor shape
+        if len(x_start.shape) == 3:  # [batch, seq_len, vocab_size]
+            sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1, 1)
+            sqrt_one_minus_alphas_cumprod_t = sqrt_one_minus_alphas_cumprod_t.view(-1, 1, 1)
+        else:  # [batch, seq_len]
+            sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1)
+            sqrt_one_minus_alphas_cumprod_t = sqrt_one_minus_alphas_cumprod_t.view(-1, 1)
 
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
     def compute_loss(self, x_start, t):
         """Compute diffusion loss with quantum path regularization."""
-        batch_size = x_start.shape[0]
+        batch_size, seq_len = x_start.shape
         device = x_start.device
 
         # Convert to continuous for diffusion
         x_start_continuous = F.one_hot(x_start, num_classes=self.vocab_size).float()
 
-        # Add noise
+        # Add noise with proper tensor handling
         noise = torch.randn_like(x_start_continuous)
         x_noisy = self.add_noise(x_start_continuous, t, noise)
 
@@ -465,6 +474,14 @@ class FeynmanPathIntegralDiffusionModel(nn.Module):
 
         # Forward pass
         predicted_logits = self.forward(x_noisy_tokens, t)
+
+        # Ensure logits have correct shape
+        if predicted_logits.shape != x_start_continuous.shape:
+            logger.warning(f"Shape mismatch: predicted {predicted_logits.shape}, expected {x_start_continuous.shape}")
+            # If output doesn't match vocab size, project it correctly
+            if predicted_logits.shape[-1] != self.vocab_size:
+                predicted_logits = F.linear(predicted_logits, 
+                                          torch.randn(self.vocab_size, predicted_logits.shape[-1], device=device))
 
         # Reconstruction loss
         reconstruction_loss = F.cross_entropy(
@@ -582,21 +599,28 @@ class QuantumDiffusionTrainer:
 
             self.optimizer.zero_grad()
 
-            # Forward pass
-            if self.scaler is not None:  # Mixed precision
-                with torch.cuda.amp.autocast():
-                    loss = self.model.compute_loss(batch, t)
+            # Forward pass with error handling
+            try:
+                if self.scaler is not None:  # Mixed precision
+                    with torch.cuda.amp.autocast():
+                        loss = self.model.compute_loss(batch, t)
 
-                self.scaler.scale(loss).backward()
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                loss = self.model.compute_loss(batch, t)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                self.optimizer.step()
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    loss = self.model.compute_loss(batch, t)
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.optimizer.step()
+                    
+            except RuntimeError as e:
+                logger.error(f"🚨 Training error at batch {batch_idx}: {e}")
+                logger.error(f"🔍 Tensor shapes - Batch: {batch.shape}, Time: {t.shape}")
+                logger.error(f"🎯 Vocab size: {self.model.vocab_size}, Max seq len: {self.model.max_seq_len}")
+                raise e
 
             self.scheduler.step()
             epoch_losses.append(loss.item())
