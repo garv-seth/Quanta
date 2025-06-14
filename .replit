@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Project"
+runButton = "Quanta Quantum Training"
 
 [[workflows.workflow]]
 name = "Project"
@@ -28,6 +28,15 @@ author = "agent"
 task = "shell.exec"
 args = "streamlit run quasar_financial_diffusion.py --server.port 5000"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Quanta Quantum Training"
+author = 33980514
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
 
 [[ports]]
 localPort = 5000
