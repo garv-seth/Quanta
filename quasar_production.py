@@ -446,7 +446,7 @@ class FeynmanPathIntegralDiffusionModel(nn.Module):
             torch.sqrt(1.0 - self.alphas_cumprod), 0, t
         ).view(-1, 1)
 
-        return sqrt_alphas_cumprod_t * x_start + sqrt_one-minus_alphas_cumprod_t * noise
+        return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
     def compute_loss(self, x_start, t):
         """Compute diffusion loss with quantum path regularization."""
