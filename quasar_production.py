@@ -446,7 +446,7 @@ class FeynmanPathIntegralDiffusionModel(nn.Module):
         sqrt_one_minus_alphas_cumprod_t = torch.gather(
             torch.sqrt(1.0 - self.alphas_cumprod), 0, t
         )
-        
+
         # Reshape for proper broadcasting with input tensor shape
         if len(x_start.shape) == 3:  # [batch, seq_len, vocab_size]
             sqrt_alphas_cumprod_t = sqrt_alphas_cumprod_t.view(-1, 1, 1)
@@ -594,8 +594,8 @@ class QuantumDiffusionTrainer:
             batch = batch.to(self.device)
             batch_size = batch.shape[0]
 
-            # Random timesteps
-            t = torch.randint(0, self.config['num_diffusion_steps'], (batch_size,), device=self.device)
+            # Random timesteps (fix bounds to prevent index error)
+            t = torch.randint(0, self.config['num_diffusion_steps'] - 1, (batch_size,), device=self.device)
 
             self.optimizer.zero_grad()
 
@@ -615,7 +615,7 @@ class QuantumDiffusionTrainer:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()
-                    
+
             except RuntimeError as e:
                 logger.error(f"🚨 Training error at batch {batch_idx}: {e}")
                 logger.error(f"🔍 Tensor shapes - Batch: {batch.shape}, Time: {t.shape}")
